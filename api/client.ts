@@ -51,24 +51,30 @@ class ApiClient {
     await secureStorage.removeItem(CREDENTIALS_KEY);
   }
 
-  async checkAuthOrRelogin(): Promise<boolean> {
+  async checkAuthOrRelogin(): Promise<{ isAuthenticated: boolean; autoLoginAttempted: boolean; error: string | null }> {
     console.log("[ApiClient] Checking auth status...");
 
-    // If the client thinks it's logged in, verify it
     if (this.client.auth.isLoggedIn()) {
       console.log("[ApiClient] Already logged in (valid session).");
-      return true;
+      return { isAuthenticated: true, autoLoginAttempted: false, error: null };
     }
+
+    this.client.auth.setLoginState(false);
 
     const creds = await this.getCredentials();
     if (creds) {
       console.log(`[ApiClient] Session lost or not started. Auto-logging in for ${creds.email}...`);
-      const success = await this.client.login(creds.email, creds.pass);
-      console.log(`[ApiClient] Auto-login SUCCESS: ${success}`);
-      return success;
+      try {
+        const success = await this.client.login(creds.email, creds.pass);
+        console.log(`[ApiClient] Auto-login SUCCESS: ${success}`);
+        return { isAuthenticated: success, autoLoginAttempted: true, error: success ? null : "Auto-login failed." };
+      } catch (error: any) {
+        console.error("[ApiClient] Auto-login FAILED with error:", error);
+        return { isAuthenticated: false, autoLoginAttempted: true, error: error.message || "Auto-login failed due to an unexpected error." };
+      }
     }
     console.log("[ApiClient] No credentials found for auto-login.");
-    return false;
+    return { isAuthenticated: false, autoLoginAttempted: false, error: null };
   }
 }
 

@@ -20,7 +20,7 @@ function RootLayoutNav() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
-      <Stack screenOptions={{ headerBackTitle: "Back" }}>
+      <Stack screenOptions={{ headerBackTitle: "Retour" }}>
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       </Stack>

@@ -30,7 +30,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="home"
         options={{
-          title: "Home",
+          title: "Accueil",
           tabBarIcon: ({ color, size }) => <Home color={color} size={size} />,
         }}
       />
@@ -55,14 +55,14 @@ export default function TabLayout() {
       <Tabs.Screen
         name="utils"
         options={{
-          title: "Utils",
+          title: "Utilitaires",
           tabBarIcon: ({ color, size }) => <Layers color={color} size={size} />,
         }}
       />
       <Tabs.Screen
         name="calcules"
         options={{
-          title: "Calcules",
+          title: "Calculs",
           tabBarIcon: ({ color, size }) => (
             <Calculator color={color} size={size} />
           ),
@@ -71,7 +71,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="settings"
         options={{
-          title: "Settings",
+          title: "Paramètres",
           tabBarIcon: ({ color, size }) => (
             <Settings color={color} size={size} />
           ),

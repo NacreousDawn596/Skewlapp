@@ -144,11 +144,11 @@ export default function LoginScreen() {
       <View style={styles.content}>
         <Text style={styles.title}>SkewlApp</Text>
         <Text style={styles.subtitle}>
-          Sign in to access your academic dashboard
+          Connectez-vous pour accéder à votre tableau de bord scolaire
         </Text>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Email</Text>
+          <Text style={styles.label}>E-mail</Text>
           <View style={styles.inputWrapper}>
             <Mail size={20} color={theme.muted} style={styles.icon} />
             <TextInput
@@ -165,12 +165,12 @@ export default function LoginScreen() {
         </View>
 
         <View style={styles.inputContainer}>
-          <Text style={styles.label}>Password</Text>
+          <Text style={styles.label}>Mot de passe</Text>
           <View style={styles.inputWrapper}>
             <Lock size={20} color={theme.muted} style={styles.icon} />
             <TextInput
               style={styles.input}
-              placeholder="Enter your password"
+              placeholder="Entrez votre mot de passe"
               placeholderTextColor={theme.muted}
               value={password}
               onChangeText={setPassword}
@@ -199,7 +199,7 @@ export default function LoginScreen() {
               end={{ x: 1, y: 0 }}
             >
               <Text style={styles.loginButtonText}>
-                {isLoggingIn ? "Signing in..." : "Sign In"}
+                {isLoggingIn ? "Connexion en cours..." : "Se connecter"}
               </Text>
             </LinearGradient>
           </TouchableOpacity>
@@ -207,7 +207,7 @@ export default function LoginScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            track schoolapp with real-time updates
+            suivez schoolapp avec des mises à jour en temps réel
           </Text>
         </View>
       </View>

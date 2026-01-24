@@ -52,7 +52,7 @@ const AbsenceItem = ({ item, name, theme, styles }: any) => {
       </View>
       <View style={[styles.statusBadge, { backgroundColor: isJustified ? '#6BCB7720' : '#FF6B6B20' }]}>
         <Text style={[styles.statusText, { color: isJustified ? '#6BCB77' : '#FF6B6B' }]}>
-          {isJustified ? 'JUSTIFIED' : 'UNJUSTIFIED'}
+          {isJustified ? 'JUSTIFIÉE' : 'NON JUSTIFIÉE'}
         </Text>
       </View>
     </View>
@@ -65,8 +65,8 @@ const SanctionHeader = ({ data, theme, styles }: any) => (
       <AlertCircle size={24} color="#FF6B6B" />
     </View>
     <View style={styles.contentBox}>
-      <Text style={[styles.itemTitle, { color: '#FF6B6B' }]}>Current Status: {data.Sanction || "None"}</Text>
-      <Text style={styles.itemMeta}>Total Unjustified: {data.Absences_non_justifiees || 0}</Text>
+      <Text style={[styles.itemTitle, { color: '#FF6B6B' }]}>Statut actuel : {data.Sanction || "Aucune"}</Text>
+      <Text style={styles.itemMeta}>Total non justifiées : {data.Absences_non_justifiees || 0}</Text>
     </View>
   </View>
 );
@@ -180,7 +180,7 @@ export default function AbsencesScreen() {
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={styles.header}>
-        <Text style={styles.title}>Absences & Sanctions</Text>
+        <Text style={styles.title}>Absences et Sanctions</Text>
         <View style={styles.tabs}>
           <TouchableOpacity
             style={[styles.tab, activeTab === "absences" && styles.activeTab]}
@@ -211,7 +211,7 @@ export default function AbsencesScreen() {
           <View style={{ marginBottom: 16 }}>
             <View style={{ backgroundColor: theme.surface, padding: 12, borderRadius: 16, flexDirection: 'row', alignItems: 'center' }}>
               <ActivityIndicator size="small" color={theme.accent} />
-              <Text style={{ marginLeft: 10, color: theme.muted, fontSize: 13, fontWeight: '600' }}>Accessing records...</Text>
+              <Text style={{ marginLeft: 10, color: theme.muted, fontSize: 13, fontWeight: '600' }}>Accès aux dossiers...</Text>
             </View>
           </View>
         )}
@@ -229,7 +229,7 @@ export default function AbsencesScreen() {
               return (
                 <View style={styles.emptyContainer}>
                   <Clock size={48} color={theme.muted} style={{ opacity: 0.5 }} />
-                  <Text style={styles.emptyText}>No absences recorded in the current session.</Text>
+                  <Text style={styles.emptyText}>Aucune absence enregistrée pour la session en cours.</Text>
                 </View>
               );
             }
@@ -251,7 +251,7 @@ export default function AbsencesScreen() {
               return (
                 <View style={styles.emptyContainer}>
                   <ShieldAlert size={48} color={theme.muted} style={{ opacity: 0.5 }} />
-                  <Text style={styles.emptyText}>You have no academic sanctions. Keep it up!</Text>
+                  <Text style={styles.emptyText}>Vous n'avez pas de sanctions académiques. Continuez comme ça !</Text>
                 </View>
               );
             }
@@ -263,7 +263,7 @@ export default function AbsencesScreen() {
                   <View key={`unauth-${idx}`} style={[styles.card, { backgroundColor: '#FF6B6B10' }]}>
                     <View style={styles.iconBox}><XCircle size={22} color="#FF6B6B" /></View>
                     <View style={styles.contentBox}>
-                      <Text style={[styles.itemTitle, { color: '#FF6B6B' }]}>Not Authorized: {moduleMappings?.[code] || code}</Text>
+                      <Text style={[styles.itemTitle, { color: '#FF6B6B' }]}>Non autorisé : {moduleMappings?.[code] || code}</Text>
                       <Text style={styles.itemMeta}>• {code} •</Text>
                     </View>
                   </View>

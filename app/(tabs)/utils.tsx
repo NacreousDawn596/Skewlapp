@@ -152,7 +152,7 @@ export default function UtilsScreen() {
     return (
       <View>
         <View style={styles.selectorContainer}>
-          <Text style={styles.selectorLabel}>Academic level</Text>
+          <Text style={styles.selectorLabel}>Niveau académique</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pickerRow}>
             {niveaus.map(n => (
               <TouchableOpacity key={`niv-${n}`} onPress={() => setSelNiveau(n)} style={[styles.chip, selNiveau === n && styles.chipActive]}>
@@ -161,16 +161,16 @@ export default function UtilsScreen() {
             ))}
           </ScrollView>
 
-          <Text style={styles.selectorLabel}>Semester</Text>
+          <Text style={styles.selectorLabel}>Semestre</Text>
           <View style={styles.pickerRow}>
             {semestres.map(s => (
               <TouchableOpacity key={`sem-${s}`} onPress={() => setSelSemestre(s)} style={[styles.chip, selSemestre === s && styles.chipActive]}>
-                <Text style={[styles.chipText, selSemestre === s && styles.chipTextActive]}>{s === "S1" ? "Semester 1" : "Semester 2"}</Text>
+                <Text style={[styles.chipText, selSemestre === s && styles.chipTextActive]}>{s === "S1" ? "Semestre 1" : "Semestre 2"}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <Text style={styles.selectorLabel}>Program (Filière)</Text>
+          <Text style={styles.selectorLabel}>Programme (Filière)</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {filieres.map((f: any, idx: number) => (
               <TouchableOpacity key={`filiere-sel-${f.code || idx}`} onPress={() => setSelFiliere(f.code)} style={[styles.chip, selFiliere === f.code && styles.chipActive]}>
@@ -183,7 +183,7 @@ export default function UtilsScreen() {
         {modulesLookupQuery.isLoading ? (
           <View style={{ padding: 40, alignItems: 'center' }}>
             <ActivityIndicator size="large" color={theme.accent} />
-            <Text style={{ color: theme.muted, marginTop: 12, fontWeight: '600' }}>Loading modules...</Text>
+            <Text style={{ color: theme.muted, marginTop: 12, fontWeight: '600' }}>Chargement des modules...</Text>
           </View>
         ) : (
           Object.entries(modulesLookupQuery.data || {}).length > 0 ? (
@@ -213,7 +213,7 @@ export default function UtilsScreen() {
           ) : (
             <View style={styles.emptyContainer}>
               <Library size={48} color={theme.muted} style={{ opacity: 0.3 }} />
-              <Text style={styles.emptyText}>No modules available for this selection.</Text>
+              <Text style={styles.emptyText}>Aucun module disponible pour cette sélection.</Text>
             </View>
           )
         )}
@@ -244,7 +244,7 @@ export default function UtilsScreen() {
       return (
         <View style={styles.statusCard}>
           <ActivityIndicator size="large" color={theme.accent} />
-          <Text style={{ color: theme.muted, marginTop: 16 }}>Checking platform availability...</Text>
+          <Text style={{ color: theme.muted, marginTop: 16 }}>Vérification de la disponibilité de la plateforme...</Text>
         </View>
       );
     }
@@ -257,17 +257,17 @@ export default function UtilsScreen() {
           {isOnline ? <CheckCircle2 size={48} color="#6BCB77" /> : <XCircle size={48} color="#FF6B6B" />}
         </View>
         <Text style={[styles.statusTitle, { color: isOnline ? '#6BCB77' : '#FF6B6B' }]}>
-          {isOnline ? "Operational" : "Service Issue"}
+          {isOnline ? "Opérationnel" : "Problème de service"}
         </Text>
-        <Text style={styles.statusSub}>SchoolApp platform is {isOnline ? 'reachable' : 'unreachable'} from your network.</Text>
+        <Text style={styles.statusSub}>La plateforme SchoolApp est {isOnline ? 'accessible' : 'inaccessible'} depuis votre réseau.</Text>
 
         <View style={[styles.modMeta, { width: '100%', marginTop: 40 }]}>
           <View style={styles.metaItem}>
-            <Text style={styles.metaLabel}>Response Time</Text>
+            <Text style={styles.metaLabel}>Temps de réponse</Text>
             <Text style={styles.metaVal}>{status?.latency || 0}ms</Text>
           </View>
           <View style={styles.metaItem}>
-            <Text style={styles.metaLabel}>Last Checked</Text>
+            <Text style={styles.metaLabel}>Dernière vérification</Text>
             <Text style={styles.metaVal}>{status?.time || "--:--:--"}</Text>
           </View>
         </View>
@@ -276,7 +276,7 @@ export default function UtilsScreen() {
           style={{ marginTop: 32, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 16, backgroundColor: theme.background }}
           onPress={() => platformStatusQuery.refetch()}
         >
-          <Text style={[styles.chipText, { color: theme.text }]}>Check Again</Text>
+          <Text style={[styles.chipText, { color: theme.text }]}>Vérifier à nouveau</Text>
         </TouchableOpacity>
       </View>
     );
@@ -292,7 +292,7 @@ export default function UtilsScreen() {
           </TouchableOpacity>
         )}
         <Text style={styles.headerTitle}>
-          {activeUtil === "filieres" ? "Filieres" : activeUtil === "modules" ? "Plan d'Etude" : activeUtil === "status" ? "System Health" : "Utilities"}
+          {activeUtil === "filieres" ? "Filières" : activeUtil === "modules" ? "Plan d'Étude" : activeUtil === "status" ? "État du système" : "Utilitaires"}
         </Text>
       </View>
 
@@ -306,8 +306,8 @@ export default function UtilsScreen() {
             >
               <View style={[styles.iconBg, { backgroundColor: '#4D96FF20' }]}><Library size={24} color="#4D96FF" /></View>
               <View style={styles.textContainer}>
-                <Text style={styles.menuTitle}>Plan d'etude</Text>
-                <Text style={styles.menuSub}>Detailed thresholds and syllabus info</Text>
+                <Text style={styles.menuTitle}>Plan d'étude</Text>
+                <Text style={styles.menuSub}>Seuils détaillés et informations sur le programme</Text>
               </View>
               <ChevronRight size={20} color={theme.muted} />
             </TouchableOpacity>
@@ -320,7 +320,7 @@ export default function UtilsScreen() {
               <View style={[styles.iconBg, { backgroundColor: '#6BCB7720' }]}><GraduationCap size={24} color="#6BCB77" /></View>
               <View style={styles.textContainer}>
                 <Text style={styles.menuTitle}>Filières</Text>
-                <Text style={styles.menuSub}>Browse all engineering pathways</Text>
+                <Text style={styles.menuSub}>Parcourir toutes les filières d'ingénierie</Text>
               </View>
               <ChevronRight size={20} color={theme.muted} />
             </TouchableOpacity>
@@ -332,8 +332,8 @@ export default function UtilsScreen() {
             >
               <View style={[styles.iconBg, { backgroundColor: '#FFD93D20' }]}><Activity size={24} color="#FFD93D" /></View>
               <View style={styles.textContainer}>
-                <Text style={styles.menuTitle}>Platform Health</Text>
-                <Text style={styles.menuSub}>Real-time server connectivity pulse</Text>
+                <Text style={styles.menuTitle}>État de la plateforme</Text>
+                <Text style={styles.menuSub}>Connectivité serveur en temps réel</Text>
               </View>
               <ChevronRight size={20} color={theme.muted} />
             </TouchableOpacity>

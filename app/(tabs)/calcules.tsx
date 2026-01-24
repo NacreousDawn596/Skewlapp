@@ -83,7 +83,7 @@ const ElementRow = ({ elem, theme, styles, updateMark, getStatusColor }: any) =>
         )}
 
         <View style={styles.elemAvgBox}>
-          <Text style={styles.inputLabel}>AVG</Text>
+          <Text style={styles.inputLabel}>MOY</Text>
           <Text style={[styles.elemAvgText, { color: getStatusColor(elem.average) }]}>{elem.average.toFixed(1)}</Text>
         </View>
       </View>
@@ -273,20 +273,20 @@ export default function CalculesScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
           <Calculator size={24} color={theme.accent} />
-          <Text style={{ fontSize: 24, fontWeight: '800', color: theme.text, marginLeft: 10 }}>Simulator</Text>
+          <Text style={{ fontSize: 24, fontWeight: '800', color: theme.text, marginLeft: 10 }}>Simulateur</Text>
         </View>
 
         {!lastPollTime && isPolling && (
           <View style={{ marginBottom: 16 }}>
             <View style={{ backgroundColor: theme.surface, padding: 12, borderRadius: 16, flexDirection: 'row', alignItems: 'center' }}>
               <ActivityIndicator size="small" color={theme.accent} />
-              <Text style={{ marginLeft: 10, color: theme.muted, fontSize: 13, fontWeight: '600' }}>Fetching academic rules...</Text>
+              <Text style={{ marginLeft: 10, color: theme.muted, fontSize: 13, fontWeight: '600' }}>Récupération des règles académiques...</Text>
             </View>
           </View>
         )}
 
         <View style={styles.selectorCard}>
-          <Text style={styles.selLabel}>Academic Period</Text>
+          <Text style={styles.selLabel}>Période Académique</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
             {["1A", "2A", "3A", "4A", "5A"].map(n => (
               <TouchableOpacity key={n} onPress={() => setSelNiveau(n)} style={[styles.chip, selNiveau === n && styles.chipActive]}>
@@ -297,7 +297,7 @@ export default function CalculesScreen() {
           <View style={styles.chipRow}>
             {["S1", "S2"].map(s => (
               <TouchableOpacity key={s} onPress={() => setSelSemestre(s)} style={[styles.chip, selSemestre === s && styles.chipActive, { flex: 1 }]}>
-                <Text style={[styles.chipText, selSemestre === s && styles.chipActiveText, { textAlign: 'center' }]}>{s === "S1" ? "Semester 1" : "Semester 2"}</Text>
+                <Text style={[styles.chipText, selSemestre === s && styles.chipActiveText, { textAlign: 'center' }]}>{s === "S1" ? "Semestre 1" : "Semestre 2"}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -334,7 +334,7 @@ export default function CalculesScreen() {
         ) : (
           <View style={styles.empty}>
             <Layers size={48} color={theme.muted} style={{ opacity: 0.3 }} />
-            <Text style={styles.emptyText}>No data mapping found for this selection.</Text>
+            <Text style={styles.emptyText}>Aucune donnée trouvée pour cette sélection.</Text>
           </View>
         )}
       </ScrollView>
@@ -344,7 +344,7 @@ export default function CalculesScreen() {
         <View style={styles.footerContent}>
           <View>
             <Text style={styles.footerLabel}>Moyenne Générale</Text>
-            <Text style={{ fontSize: 11, color: theme.muted }}>Estimated simulator result</Text>
+            <Text style={{ fontSize: 11, color: theme.muted }}>Résultat estimé du simulateur</Text>
           </View>
           <Animated.Text style={[styles.footerValue, { color: getStatusColor(calculatedData.globalAvg), transform: [{ scale: gpaAnim }] }]}>
             {calculatedData.globalAvg.toFixed(3)}

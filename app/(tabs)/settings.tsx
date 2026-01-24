@@ -56,12 +56,12 @@ export default function SettingsScreen() {
 
   const handleLogout = () => {
     Alert.alert(
-      "Logout",
-      "Are you sure you want to logout?",
+      "Déconnexion",
+      "Êtes-vous sûr de vouloir vous déconnecter ?",
       [
-        { text: "Cancel", style: "cancel" },
+        { text: "Annuler", style: "cancel" },
         {
-          text: "Logout",
+          text: "Se déconnecter",
           style: "destructive",
           onPress: () => logout(),
         },
@@ -74,14 +74,14 @@ export default function SettingsScreen() {
     if (interval >= 45 && interval <= 360) {
       updateSettingsMutation.mutate({ interval });
     } else {
-      Alert.alert("Invalid interval", "Please enter a value between 45 and 360 minutes");
+      Alert.alert("Intervalle invalide", "Veuillez entrer une valeur entre 45 et 360 minutes");
     }
   };
 
   const fontSizes: { value: FontSize; label: string }[] = [
-    { value: "small", label: "Small" },
+    { value: "small", label: "Petit" },
     { value: "normal", label: "Normal" },
-    { value: "large", label: "Large" },
+    { value: "large", label: "Grand" },
     { value: "xl", label: "XL" },
   ];
 
@@ -126,12 +126,12 @@ export default function SettingsScreen() {
       />
 
       <View style={{ padding: 24, paddingTop: 40 }}>
-        <Text style={{ fontSize: scaled(32), fontWeight: '900', color: theme.text }}>Settings</Text>
+        <Text style={{ fontSize: scaled(32), fontWeight: '900', color: theme.text }}>Paramètres</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Appearance</Text>
+          <Text style={styles.sectionTitle}>Apparence</Text>
           <View style={styles.card}>
             <TouchableOpacity
               style={styles.settingItem}
@@ -142,7 +142,7 @@ export default function SettingsScreen() {
                 <Palette size={scaled(20)} color={theme.accent} />
               </View>
               <View style={styles.settingContent}>
-                <Text style={styles.settingTitle}>Theme Color</Text>
+                <Text style={styles.settingTitle}>Couleur du Thème</Text>
                 <Text style={styles.settingSubtitle}>{theme.name}</Text>
               </View>
               <ChevronRight size={scaled(20)} color={theme.muted} />
@@ -192,7 +192,7 @@ export default function SettingsScreen() {
                 <Type size={scaled(20)} color={theme.accent} />
               </View>
               <View style={styles.settingContent}>
-                <Text style={styles.settingTitle}>Font Size</Text>
+                <Text style={styles.settingTitle}>Taille de Police</Text>
                 <Text style={styles.settingSubtitle}>
                   {fontSize.charAt(0).toUpperCase() + fontSize.slice(1)}
                 </Text>
@@ -225,15 +225,15 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Polling</Text>
+          <Text style={styles.sectionTitle}>Actualisation</Text>
           <View style={styles.card}>
             <View style={styles.settingItem}>
               <View style={styles.iconContainer}>
                 <Timer size={scaled(20)} color={theme.accent} />
               </View>
               <View style={styles.settingContent}>
-                <Text style={styles.settingTitle}>Refresh Interval (mins)</Text>
-                <Text style={styles.settingSubtitle}>Auto-updates in background</Text>
+                <Text style={styles.settingTitle}>Intervalle d'actualisation (mins)</Text>
+                <Text style={styles.settingSubtitle}>Mises à jour automatiques en arrière-plan</Text>
               </View>
               <TextInput
                 style={styles.intervalInput}
@@ -254,8 +254,8 @@ export default function SettingsScreen() {
                 <Bell size={scaled(20)} color={theme.accent} />
               </View>
               <View style={styles.settingContent}>
-                <Text style={styles.settingTitle}>All Notifications</Text>
-                <Text style={styles.settingSubtitle}>Enable or disable all app notifications</Text>
+                <Text style={styles.settingTitle}>Toutes les notifications</Text>
+                <Text style={styles.settingSubtitle}>Activer ou désactiver toutes les notifications</Text>
               </View>
               <Switch
                 value={settingsQuery.data?.notificationsEnabled ?? true}
@@ -270,8 +270,8 @@ export default function SettingsScreen() {
                 <Bell size={scaled(20)} color={theme.accent} />
               </View>
               <View style={styles.settingContent}>
-                <Text style={styles.settingTitle}>Grade Updates</Text>
-                <Text style={styles.settingSubtitle}>New marks and modifications</Text>
+                <Text style={styles.settingTitle}>Mises à jour des notes</Text>
+                <Text style={styles.settingSubtitle}>Nouvelles notes et modifications</Text>
               </View>
               <Switch
                 value={settingsQuery.data?.notifyNotes ?? true}
@@ -288,7 +288,7 @@ export default function SettingsScreen() {
               </View>
               <View style={styles.settingContent}>
                 <Text style={styles.settingTitle}>Absences</Text>
-                <Text style={styles.settingSubtitle}>New absence alerts</Text>
+                <Text style={styles.settingSubtitle}>Alertes de nouvelles absences</Text>
               </View>
               <Switch
                 value={settingsQuery.data?.notifyAbsences ?? true}
@@ -304,8 +304,8 @@ export default function SettingsScreen() {
                 <Bell size={scaled(20)} color={theme.accent} />
               </View>
               <View style={styles.settingContent}>
-                <Text style={styles.settingTitle}>Official Sanctions</Text>
-                <Text style={styles.settingSubtitle}>Administrative announcements</Text>
+                <Text style={styles.settingTitle}>Sanctions officielles</Text>
+                <Text style={styles.settingSubtitle}>Annonces administratives</Text>
               </View>
               <Switch
                 value={settingsQuery.data?.notifySanctions ?? true}
@@ -324,11 +324,11 @@ export default function SettingsScreen() {
           activeOpacity={0.8}
         >
           <LogOut size={scaled(20)} color="#FFFFFF" />
-          <Text style={styles.logoutButtonText}>Logout Account</Text>
+          <Text style={styles.logoutButtonText}>Se déconnecter</Text>
         </TouchableOpacity>
 
         <View style={{ marginTop: 24 }}>
-          <Text style={styles.sectionTitle}>App Info</Text>
+          <Text style={styles.sectionTitle}>Infos sur l'application</Text>
           <TouchableOpacity
             style={styles.githubButton}
             onPress={() => Linking.openURL('https://github.com/NacreousDawn596/SkewlApp')}
@@ -336,14 +336,14 @@ export default function SettingsScreen() {
             <View style={[styles.iconContainer, { backgroundColor: theme.background }]}>
               <Github size={scaled(20)} color={theme.text} />
             </View>
-            <Text style={styles.githubText}>Check for Updates</Text>
+            <Text style={styles.githubText}>Vérifier les mises à jour</Text>
             <ChevronRight size={scaled(18)} color={theme.muted} />
           </TouchableOpacity>
         </View>
 
         <View style={styles.creditsContainer}>
           <Text style={styles.creditsText}>
-            by Aferiad Kamal and El Banane Nada
+            by Aferiad Kamal & El Banane Nada
             {/* Aferiad Kamal */}
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>

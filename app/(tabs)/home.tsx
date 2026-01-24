@@ -361,7 +361,7 @@ export default function HomeScreen() {
       {!netInfo.isConnected && (
         <View style={styles.offlineBanner}>
           <WifiOff size={16} color="white" />
-          <Text style={styles.offlineText}>You are offline</Text>
+          <Text style={styles.offlineText}>Vous êtes hors ligne</Text>
         </View>
       )}
       <ScrollView
@@ -389,18 +389,18 @@ export default function HomeScreen() {
               )}
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.welcomeMsg}>Bonjours,</Text>
+              <Text style={styles.welcomeMsg}>Bonjour,</Text>
               <Text style={styles.profileName} numberOfLines={1}>
-                {profile?.basic_info?.full_name?.split(" ")[0] || "Student"}
+                {profile?.basic_info?.full_name?.split(" ")[0] || "Étudiant"}
               </Text>
               <View style={styles.statusBadge}>
                 <Text style={styles.statusText}>
-                  {profile?.administrative_info?.Code || "Active Student"}
+                  {profile?.administrative_info?.Code || "Étudiant Actif"}
                 </Text>
               </View>
               {lastPollTime && (
                 <Text style={{ color: "white", fontSize: 12, marginTop: 4 }}>
-                  Last updated: {dayjs(lastPollTime).fromNow()}
+                  Dernière mise à jour: {dayjs(lastPollTime).fromNow()}
                 </Text>
               )}
             </View>
@@ -440,20 +440,20 @@ export default function HomeScreen() {
           <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
             <View style={{ backgroundColor: theme.surface, padding: 12, borderRadius: 16, flexDirection: 'row', alignItems: 'center' }}>
               <ActivityIndicator size="small" color={theme.accent} />
-              <Text style={{ marginLeft: 10, color: theme.muted, fontSize: 13, fontWeight: '600' }}>Initial data sync in progress...</Text>
+              <Text style={{ marginLeft: 10, color: theme.muted, fontSize: 13, fontWeight: '600' }}>Synchronisation initiale des données en cours...</Text>
             </View>
           </View>
         )}
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Academic Information</Text>
+          <Text style={styles.sectionTitle}>Informations académiques</Text>
           <View style={[styles.infoCard, { marginTop: 12 }]}>
             <View style={styles.infoRow}>
               <View style={styles.infoIcon}>
                 <GraduationCap size={20} color={theme.accent} />
               </View>
               <View>
-                <Text style={styles.infoLabel}>Program / Filière</Text>
+                <Text style={styles.infoLabel}>Programme / Filière</Text>
                 <Text style={styles.infoValue}>{profile?.administrative_info?.Filière || "N/A"}</Text>
               </View>
             </View>
@@ -462,7 +462,7 @@ export default function HomeScreen() {
                 <TrendingUp size={20} color={theme.accent} />
               </View>
               <View>
-                <Text style={styles.infoLabel}>Level / Niveau</Text>
+                <Text style={styles.infoLabel}>Niveau</Text>
                 <Text style={styles.infoValue}>{profile?.administrative_info?.Niveau || "N/A"}</Text>
               </View>
             </View>
@@ -482,9 +482,9 @@ export default function HomeScreen() {
 
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Updates</Text>
+            <Text style={styles.sectionTitle}>Mises à jour récentes</Text>
             <TouchableOpacity onPress={async () => { await clearActivityFeed(); activityQuery.refetch(); }}>
-              <Text style={styles.viewAll}>Clear</Text>
+              <Text style={styles.viewAll}>Effacer</Text>
             </TouchableOpacity>
           </View>
 
@@ -517,10 +517,9 @@ export default function HomeScreen() {
           ) : (
             <View style={styles.emptyState}>
               <Bell size={40} color={theme.muted} />
-              <Text style={styles.emptyStateText}>
-                No recent activity. Updates will appear here.
-              </Text>
-            </View>
+                              <Text style={styles.emptyStateText}>
+                                Aucune activité récente. Les mises à jour apparaîtront ici.
+                              </Text>            </View>
           )}
         </View>
       </ScrollView>

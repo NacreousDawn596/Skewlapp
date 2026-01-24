@@ -14,6 +14,7 @@ interface AuthContextValue {
   logout: () => Promise<void>;
   loginError: string | null;
   isLoggingIn: boolean;
+  hasAttemptedAutoLogin: boolean;
 }
 
 const CREDENTIALS_KEY = "credentials";
@@ -27,17 +28,27 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
   const checkAuthQuery = useQuery({
     queryKey: ["checkAuth"],
     queryFn: async () => {
-      const isAuth = await apiClient.checkAuthOrRelogin();
-      const storedProfile = await secureStorage.getItem(PROFILE_KEY);
+      const authStatus = await apiClient.checkAuthOrRelogin(); // New return type
 
-      if (isAuth && storedProfile) {
-        const profileData = JSON.parse(storedProfile) as UserProfile;
-        setProfile(profileData);
-        setIsAuthenticated(true);
-        return { isAuthenticated: true, profile: profileData };
+      let profileData: UserProfile | null = null;
+      if (authStatus.isAuthenticated) {
+        const storedProfile = await secureStorage.getItem(PROFILE_KEY);
+        if (storedProfile) {
+          profileData = JSON.parse(storedProfile) as UserProfile;
+          setProfile(profileData);
+          setIsAuthenticated(true);
+        } else {
+          // If authenticated but no profile, something is wrong, force re-login
+          return { isAuthenticated: false, autoLoginAttempted: true, error: "Profile missing after successful auto-login." };
+        }
       }
 
-      return { isAuthenticated: false, profile: null };
+      return {
+        isAuthenticated: authStatus.isAuthenticated,
+        profile: profileData,
+        autoLoginAttempted: authStatus.autoLoginAttempted,
+        error: authStatus.error,
+      };
     },
     retry: false,
   });
@@ -101,9 +112,17 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
   };
 
   useEffect(() => {
-    if (!checkAuthQuery.isLoading && !isAuthenticated) {
-      if (!checkAuthQuery.data?.isAuthenticated) {
-        router.replace("/login");
+    if (!checkAuthQuery.isLoading) {
+      if (!isAuthenticated) {
+        if (checkAuthQuery.data?.autoLoginAttempted && checkAuthQuery.data?.error) {
+          // Auto-login attempted and failed, display error
+          setLoginError(checkAuthQuery.data.error);
+          router.replace("/login");
+        } else if (!checkAuthQuery.data?.autoLoginAttempted) {
+          // No auto-login attempted (no credentials found), go to login
+          router.replace("/login");
+        }
+        // If isAuthenticated is true, do nothing (stay on current page or navigate to home)
       }
     }
   }, [checkAuthQuery.isLoading, isAuthenticated, checkAuthQuery.data]);
@@ -116,5 +135,6 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
     logout,
     loginError,
     isLoggingIn: loginMutation.isPending,
+    hasAttemptedAutoLogin: checkAuthQuery.data?.autoLoginAttempted ?? false,
   };
 });

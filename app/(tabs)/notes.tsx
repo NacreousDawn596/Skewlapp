@@ -109,9 +109,9 @@ const NoteSummaryItem = ({ item, theme, styles }: any) => {
     <View style={[styles.dataCard, { borderLeftWidth: 4, borderLeftColor: isPassing ? "#6BCB77" : theme.accent }]}>
       <View style={{ flex: 1 }}>
         <Text style={styles.dataTitle}>{item.Semestre || item.Niveau}</Text>
-        <Text style={styles.dataMeta}>{item.AU} • {item.Statut || "Session Result"}</Text>
+        <Text style={styles.dataMeta}>{item.AU} • {item.Statut || "Résultat de la Session"}</Text>
         {item.Decision && <Text style={[styles.dataMeta, { fontWeight: '700', color: theme.text }]}>{item.Decision}</Text>}
-        {item.Classement && <Text style={styles.dataMeta}>Rank: {item.Classement}</Text>}
+        {item.Classement && <Text style={styles.dataMeta}>Rang: {item.Classement}</Text>}
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={[styles.dataGrade, { color: isPassing ? "#6BCB77" : theme.accent, fontSize: 24 }]}>
@@ -129,7 +129,7 @@ const MENU_ITEMS: MenuItem[] = [
   { id: "allElems", title: "Elements", iconName: "History", color: "#FFD93D" },
   { id: "allMods", title: "Modules", iconName: "Layers2", color: "#FF6B6B" },
   { id: "semestres", title: "Semestres", iconName: "Calendar", color: "#F97316" },
-  { id: "annees", title: "Annees", iconName: "Award", color: "#92A9BD" },
+  { id: "annees", title: "Années", iconName: "Award", color: "#92A9BD" },
 ];
 
 export default function NotesScreen() {
@@ -247,7 +247,7 @@ export default function NotesScreen() {
     if (data.length === 0) {
       return (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No records found for this category.</Text>
+          <Text style={styles.emptyText}>Aucun relevé trouvé pour cette catégorie.</Text>
         </View>
       );
     }
@@ -273,7 +273,7 @@ export default function NotesScreen() {
           </TouchableOpacity>
         )}
         <Text style={styles.headerTitle}>
-          {selectedCategory ? MENU_ITEMS.find(i => i.id === selectedCategory)?.title : "Academic Records"}
+          {selectedCategory ? MENU_ITEMS.find(i => i.id === selectedCategory)?.title : "Relevés de Notes"}
         </Text>
       </View>
       <ScrollView
@@ -290,7 +290,7 @@ export default function NotesScreen() {
           <View style={{ marginBottom: 16 }}>
             <View style={{ backgroundColor: theme.surface, padding: 12, borderRadius: 16, flexDirection: 'row', alignItems: 'center' }}>
               <ActivityIndicator size="small" color={theme.accent} />
-              <Text style={{ marginLeft: 10, color: theme.muted, fontSize: 13, fontWeight: '600' }}>Initial sync in progress...</Text>
+              <Text style={{ marginLeft: 10, color: theme.muted, fontSize: 13, fontWeight: '600' }}>Synchronisation initiale en cours...</Text>
             </View>
           </View>
         )}
