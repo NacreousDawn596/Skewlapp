@@ -1,0 +1,158 @@
+export interface ThemePalette {
+  name: string;
+  background: string;
+  surface: string;
+  primary: string;
+  accent: string;
+  text: string;
+  muted: string;
+}
+
+export const THEME_PALETTES: ThemePalette[] = [
+  {
+    name: "Noir Luxe",
+    background: "#0B0B0C",
+    surface: "#101112",
+    primary: "#C0C0C0",
+    accent: "#8AB4FF",
+    text: "#E6E7E8",
+    muted: "#9A9C9F",
+  },
+  {
+    name: "Graphite Minimal",
+    background: "#0F1114",
+    surface: "#16181C",
+    primary: "#BDBDBD",
+    accent: "#4EA1FF",
+    text: "#F5F6F7",
+    muted: "#A3A6AA",
+  },
+  {
+    name: "Charcoal Slate",
+    background: "#0D1316",
+    surface: "#111419",
+    primary: "#9DA5AB",
+    accent: "#7BE495",
+    text: "#EFF1F2",
+    muted: "#889399",
+  },
+  {
+    name: "Midnight Chrome",
+    background: "#07080A",
+    surface: "#0E0F11",
+    primary: "#D0D6DB",
+    accent: "#FF8C69",
+    text: "#F7F7F8",
+    muted: "#A7ACB1",
+  },
+  {
+    name: "Obsidian Gold",
+    background: "#070709",
+    surface: "#0D0C0E",
+    primary: "#E6C07B",
+    accent: "#FFD89A",
+    text: "#FAF9F6",
+    muted: "#A08E6E",
+  },
+  {
+    name: "Ink Blue",
+    background: "#0A0F1A",
+    surface: "#0F1623",
+    primary: "#A9C3FF",
+    accent: "#53E0C9",
+    text: "#EAF2FF",
+    muted: "#93A3B8",
+  },
+  {
+    name: "Slate Green",
+    background: "#0D1211",
+    surface: "#121716",
+    primary: "#A4D0AE",
+    accent: "#6FD3B3",
+    text: "#F6FFF9",
+    muted: "#9BB39A",
+  },
+  {
+    name: "Smoky Lavender",
+    background: "#0E0B12",
+    surface: "#13101A",
+    primary: "#CDB4DB",
+    accent: "#A78BFA",
+    text: "#FBF9FF",
+    muted: "#B39CC6",
+  },
+  {
+    name: "Steel Edge",
+    background: "#0B0D0F",
+    surface: "#121416",
+    primary: "#B4BEC8",
+    accent: "#00C2FF",
+    text: "#E7EEF6",
+    muted: "#95A4B0",
+  },
+  {
+    name: "Warm Ember",
+    background: "#110B09",
+    surface: "#16100E",
+    primary: "#FFB199",
+    accent: "#FF6B6B",
+    text: "#FFF7F6",
+    muted: "#B98A7F",
+  },
+  {
+    name: "Moonstone Light",
+    background: "#F5F6F7",
+    surface: "#FFFFFF",
+    primary: "#30343A",
+    accent: "#6B8CFF",
+    text: "#0B0D10",
+    muted: "#7D8790",
+  },
+  {
+    name: "Ivory Calm",
+    background: "#FBFAF7",
+    surface: "#FFFFFF",
+    primary: "#566270",
+    accent: "#8DC6FF",
+    text: "#0D1113",
+    muted: "#9AA6B0",
+  },
+  {
+    name: "Cream & Clay",
+    background: "#FCF9F6",
+    surface: "#F3EEE9",
+    primary: "#5B5B6A",
+    accent: "#FFB84D",
+    text: "#0B0C0D",
+    muted: "#9B8F85",
+  },
+  {
+    name: "Nordic Dawn",
+    background: "#F2F7F9",
+    surface: "#FFFFFF",
+    primary: "#2D3A4A",
+    accent: "#2AC4B3",
+    text: "#071018",
+    muted: "#9DB0BA",
+  },
+  {
+    name: "Platinum",
+    background: "#F8F9FB",
+    surface: "#F4F6F8",
+    primary: "#1A1D20",
+    accent: "#7B7BFF",
+    text: "#0B0D10",
+    muted: "#9AA0A8",
+  },
+  {
+    name: "Deep Velvet",
+    background: "#0A0206",
+    surface: "#140613",
+    primary: "#F1C6E7",
+    accent: "#D97BFF",
+    text: "#FAF7FB",
+    muted: "#A67FA5",
+  },
+];
+
+export const DEFAULT_THEME = THEME_PALETTES[0];
