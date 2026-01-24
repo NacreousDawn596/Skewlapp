@@ -3,7 +3,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { apiClient, schoolAppClient, secureStorage } from "../api/client";
-import { clearAllCache } from "../services/polling";
+import { clearAllCache } from "../services/cache";
 import { UserProfile } from "../types/api";
 
 interface AuthContextValue {

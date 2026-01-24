@@ -19,7 +19,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Stack } from "expo-router";
 import { schoolAppClient, secureStorage } from "@/api/client";
 import { useQuery } from "@tanstack/react-query";
-import { getCachedData } from "@/services/polling";
+import { getCachedData } from "@/services/cache";
 import { usePolling } from "@/contexts/PollingContext";
 import {
   ChevronDown,
@@ -184,9 +184,17 @@ export default function CalculesScreen() {
         const cc = u.CC !== undefined ? u.CC : (res?.CC || "");
         const tp = u.TP !== undefined ? u.TP : (res?.TP || "");
         const ex = u.EX !== undefined ? u.EX : (res?.EX || "");
-        const nCC = parseFloat(String(cc).replace(',', '.')) || 0;
-        const nTP = parseFloat(String(tp).replace(',', '.')) || 0;
-        const nEX = parseFloat(String(ex).replace(',', '.')) || 0;
+        let nCC = parseFloat(String(cc).replace(',', '.')) || 0;
+        let nTP = parseFloat(String(tp).replace(',', '.')) || 0;
+        let nEX = parseFloat(String(ex).replace(',', '.')) || 0;
+
+        // Apply RATT logic if available and valid
+        const nRATT = parseFloat(String(res?.RATT).replace(',', '.')) || null;
+        if (nRATT !== null && !isNaN(nRATT)) {
+          if (nCC > 0) nCC = Math.max(nCC, nRATT);
+          nEX = nRATT;
+          if (nTP > 0) nTP = Math.max(nTP, nRATT);
+        }
         let eAvg = 0;
         const cCC = parseFloat(elem.coef_cc) || 0;
         const cEX = parseFloat(elem.coef_ex) || 0;
