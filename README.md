@@ -1,144 +1,87 @@
-# 🎓 SkewlApp
+<div align="center">
+  <img src="https://github.com/afer-kamal/schoolapp_api/blob/main/assets/images/icon.png?raw=true" alt="SkewlApp Logo" width="120" />
+  <h1>🎓 SkewlApp</h1>
+  <p>
+    <b>A sleek, fast, and reliable mobile app for ENSAM students to track their academic life in real-time.</b>
+  </p>
+  <p>
+    <a href="https://github.com/afer-kamal/schoolapp_api/releases/latest"><img src="https://img.shields.io/github/v/release/afer-kamal/schoolapp_api?style=for-the-badge&logo=github&color=8A2BE2" alt="Latest Release" /></a>
+    <a href="https://github.com/afer-kamal/schoolapp_api/blob/main/LICENSE"><img src="https://img.shields.io/github/license/afer-kamal/schoolapp_api?style=for-the-badge&color=blue" alt="License" /></a>
+    <a href="https://github.com/afer-kamal/schoolapp_api/issues"><img src="https://img.shields.io/github/issues/afer-kamal/schoolapp_api?style=for-the-badge&logo=github&color=green" alt="Issues" /></a>
+  </p>
+</div>
 
-**SkewlApp** is a schoolapp wrapper, a mobile application built with **React Native** that helps ENSAM students track their academic life in real time — notes, absences, modules, calculations, and more — all in one sleek, fast, and reliable app.
+---
 
-Designed to feel **modern, expensive, and effortless**, SkewlApp focuses on performance, clarity, and a smooth student experience.
+**SkewlApp** is a feature-rich mobile application built with **React Native (Expo)** that empowers students at ENSAM to effortlessly monitor their academic progress. From notes and absences to module calculations, SkewlApp provides a modern, intuitive, and high-performance experience.
+
+## 📜 Table of Contents
+- [✨ Features](#-features)
+- [🎨 Themes](#-themes)
+- [🏗️ Tech Stack](#️-tech-stack)
+- [📁 Project Structure](#-project-structure)
+- [🚀 Getting Started](#-getting-started)
+- [📲 Build & Deployment](#-build--deployment)
+- [🤝 Contributing](#-contributing)
+- [🔒 Security Notes](#-security-notes)
+- [🎯 Vision](#-vision)
+- [📜 License](#-license)
 
 ---
 
 ## ✨ Features
 
 ### 🔐 Authentication
-- Secure login using student credentials
-- Session-based authentication (JSESSIONID)
-- Persistent login with secure local storage
-- Automatic logout on session expiration
-
----
+- **Secure Login:** robust authentication using student credentials.
+- **Persistent Sessions:** Stay logged in with secure, session-based authentication (JSESSIONID).
+- **Auto-Refresh:** Automatic session renewal ensures you're always connected.
 
 ### 🏠 Home
-- Student profile overview
-- Profile picture (authenticated fetch)
-- Academic information loaded once per login
-- Quick glance at important data
+- **Student Dashboard:** A comprehensive overview of your academic profile.
+- **Authenticated Data:** Securely fetches and displays your profile picture and academic information.
 
----
+### 📘 Notes & Results
+- **Structured Views:** Explore your academic results with organized sections for modules, elements, semesters, and years.
+- **Real-Time Updates:** Data is automatically refreshed and cached for quick access.
 
-### 📘 Notes
-Explore your academic results with structured views:
-- **Elements en cours**
-- **Modules en cours**
-- **All Elements**
-- **All Modules**
-- **Semestres**
-- **Annees**
+### 🚫 Absences & Sanctions
+- **Track Attendance:** View detailed records of absences and sanctions.
+- **Instant Notifications:** Receive real-time alerts for new records.
 
-Data is automatically refreshed and cached for fast access.
-
----
-
-### 🚫 Absences
-- View **Absences**
-- View **Sanctions**
-- Real-time updates when new records appear
-- Clear and readable history
-
----
-
-### 🧰 Utils
-- **Modules**
-- **Filieres**
-
-These datasets are fetched once per login and cached permanently until logout.
-
----
-
-### 🧮 Calcules (Real-Time Grade Calculator)
-A powerful interactive calculator designed for students:
-
-- Selector for **Niveau**, **Filiere**, and **Semestre**
-- Defaults to the student’s current academic state
-- Loads:
-  - Current elements (live data)
-  - Historical elements (older semesters)
-- Editable inputs for:
-  - CC
-  - TP
-  - EX (only if applicable)
-- Real-time calculations:
-  - Element average
-  - Module average
-  - **Moyenne Générale**
-- All inputs are:
-  - Cached locally
-  - Persisted across app restarts
-  - Editable later
-- Smooth UI with collapsible modules and instant feedback
-
----
+### 🧮 Real-Time Grade Calculator
+- **Interactive Calculator:** A powerful tool to calculate element, module, and overall averages.
+- **Persistent & Editable:** Your calculations are saved locally and can be modified anytime.
 
 ### ⚙️ Settings
-- Logout (clears all cached data)
-- Theme selector (15+ premium themes)
-- Polling interval customization
-- Font size adjustment
-- Notification preferences
-- check for updates
+- **Customization:** Personalize your experience with over 15 premium themes, adjustable font sizes, and configurable polling intervals.
+- **Account Management:** Easily log out and clear all cached data.
 
----
-
-## 🔔 Real-Time Notifications
-While logged in, SkewlApp periodically checks for updates:
-- Notes
-- Absences
-- Sanctions
-- Academic structure changes
-
-When a change is detected, the app sends a **local notification** describing what changed.
-
-Polling interval is configurable (default: 45 minutes).
-
----
-
-## 🧠 Caching Strategy
-- Profile data: cached per login
-- Academic data: cached and refreshed periodically
-- Calculator inputs: cached per (annee / semestre / filiere)
-- Cache is cleared **only on logout**
-
-This ensures:
-- Fast performance
-- Offline tolerance
-- No accidental data loss
+### 🔔 Real-Time Notifications
+- **Stay Informed:** SkewlApp periodically checks for updates to your notes, absences, and sanctions, sending local notifications to keep you informed.
 
 ---
 
 ## 🎨 Themes
-SkewlApp ships with **15+ handcrafted themes**, ranging from:
-- Deep dark / AMOLED styles
-- Neutral professional palettes
-- Soft light themes
 
-Theme changes apply instantly and persist across sessions.
+SkewlApp offers over **15 handcrafted themes**, allowing you to personalize your experience. Choose from deep dark modes, professional neutral palettes, and soft light themes.
 
 ---
 
 ## 🏗️ Tech Stack
 
-- **React Native** (Expo)
-- **TypeScript**
-- **Expo Router**
-- **Axios**
-- **Local Secure Storage**
-- **Context API / Hooks**
-- **Local Notifications**
+- **Framework:** React Native (Expo)
+- **Language:** TypeScript
+- **Routing:** Expo Router
+- **State Management:** React Context API & Hooks
+- **API Client:** Axios
+- **Storage:** Expo SecureStore
+- **Notifications:** Expo Notifications
 
 ---
 
 ## 📁 Project Structure
 
 ```
-
 src/
 ├── api/            # API client and helpers
 ├── app/            # Screens & routes (Expo Router)
@@ -148,53 +91,90 @@ src/
 ├── themes/         # Theme palettes & provider
 ├── types/          # TypeScript types
 └── utils/          # Helpers & calculations
-
-````
+```
 
 ---
 
 ## 🚀 Getting Started
 
-### Install dependencies
-```bash
-npm install
-````
+### Prerequisites
+- Node.js (LTS version recommended)
+- Git
+- Expo Go app on your [Android](https://play.google.com/store/apps/details?id=host.exp.exponent) or [iOS](https://apps.apple.com/us/app/expo-go/id982107779) device.
 
-### Start the app
+### Installation
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/afer-kamal/schoolapp_api.git
+   cd schoolapp_api
+   ```
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+3. **Start the development server:**
+   ```bash
+   npx expo start
+   ```
+4. **Scan the QR code** with the Expo Go app to launch SkewlApp on your device.
 
+> ⚠️ For full functionality, it is highly recommended to run the app on a physical **Android or iOS** device, not on a web browser.
+
+---
+
+## 📲 Build & Deployment
+
+To create a standalone build of the app, you can use **Expo Application Services (EAS)**.
+
+### Build for Android
 ```bash
-expo start
+# Build a production-ready APK/AAB
+eas build -p android --profile production
 ```
 
-> ⚠️ For full functionality, run on **Android or iOS** (not web).
+### Build for iOS
+```bash
+# Build for iOS (requires a paid Apple Developer account)
+eas build -p ios --profile production
+```
+
+For more details, refer to the [official EAS Build documentation](https://docs.expo.dev/build/introduction/).
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! If you have ideas for new features, improvements, or bug fixes, please follow these steps:
+
+1. **Fork the repository.**
+2. **Create a new branch:** `git checkout -b feature/your-feature-name`
+3. **Make your changes** and commit them with a clear message.
+4. **Push your branch** and open a **Pull Request**.
 
 ---
 
 ## 🔒 Security Notes
 
-* Credentials and session data are never exposed publicly
-* Authenticated resources are fetched securely
-* User-entered calculator data stays local to the device
+- All credentials and session data are stored securely on your device.
+- Authenticated resources are fetched over HTTPS.
+- User-entered calculator data remains local to the device.
 
 ---
 
 ## 🎯 Vision
 
-SkewlApp aims to be:
+SkewlApp aims to be a **trusted academic companion** that is fast, clean, and frustration-free—something students actually enjoy using.
 
-* A **trusted academic companion**
-* Fast, clean, and frustration-free
-* Something students actually enjoy opening
-
-Built by students, for students.
+*Built by students, for students.*
 
 ---
 
-## 📜 License - MIT license
+## 📜 License
 
-This project is for educational and personal use.
-All academic data belongs to its respective institution.
+This project is licensed under the **MIT License**. See the [LICENSE](https://github.com/afer-kamal/schoolapp_api/blob/main/LICENSE) file for details.
 
 ---
 
-Made with lack of sleep, caffeine, and boredom by Aferiad Kamal
+<div align="center">
+  <p>Made with ❤️, lack of sleep, and a lot of coffee by <a href="https://github.com/afer-kamal">Aferiad Kamal</a></p>
+</div>
