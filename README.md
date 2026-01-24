@@ -1,13 +1,13 @@
 <div align="center">
-  <img src="https://github.com/afer-kamal/schoolapp_api/blob/main/assets/images/icon.png?raw=true" alt="SkewlApp Logo" width="120" />
+  <img src="https://github.com/NacreousDawn596/Skewlapp/blob/main/assets/images/icon.png?raw=true" alt="SkewlApp Logo" width="120" />
   <h1>🎓 SkewlApp</h1>
   <p>
     <b>A sleek, fast, and reliable mobile app for ENSAM students to track their academic life in real-time.</b>
   </p>
   <p>
-    <a href="https://github.com/afer-kamal/schoolapp_api/releases/latest"><img src="https://img.shields.io/github/v/release/afer-kamal/schoolapp_api?style=for-the-badge&logo=github&color=8A2BE2" alt="Latest Release" /></a>
-    <a href="https://github.com/afer-kamal/schoolapp_api/blob/main/LICENSE"><img src="https://img.shields.io/github/license/afer-kamal/schoolapp_api?style=for-the-badge&color=blue" alt="License" /></a>
-    <a href="https://github.com/afer-kamal/schoolapp_api/issues"><img src="https://img.shields.io/github/issues/afer-kamal/schoolapp_api?style=for-the-badge&logo=github&color=green" alt="Issues" /></a>
+    <a href="https://github.com/NacreousDawn596/Skewlapp/releases/latest"><img src="https://img.shields.io/github/v/release/NacreousDawn596/Skewlapp?style=for-the-badge&logo=github&color=8A2BE2" alt="Latest Release" /></a>
+    <a href="https://github.com/NacreousDawn596/Skewlapp/blob/main/LICENSE"><img src="https://img.shields.io/github/license/NacreousDawn596/Skewlapp?style=for-the-badge&color=blue" alt="License" /></a>
+    <a href="https://github.com/NacreousDawn596/Skewlapp/issues"><img src="https://img.shields.io/github/issues/NacreousDawn596/Skewlapp?style=for-the-badge&logo=github&color=green" alt="Issues" /></a>
   </p>
 </div>
 
@@ -105,8 +105,8 @@ src/
 ### Installation
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/afer-kamal/schoolapp_api.git
-   cd schoolapp_api
+   git clone https://github.com/NacreousDawn596/Skewlapp.git
+   cd Skewlapp
    ```
 2. **Install dependencies:**
    ```bash
@@ -171,10 +171,10 @@ SkewlApp aims to be a **trusted academic companion** that is fast, clean, and fr
 
 ## 📜 License
 
-This project is licensed under the **MIT License**. See the [LICENSE](https://github.com/afer-kamal/schoolapp_api/blob/main/LICENSE) file for details.
+This project is licensed under the **MIT License**. See the [LICENSE](https://github.com/NacreousDawn596/Skewlapp/blob/main/LICENSE) file for details.
 
 ---
 
 <div align="center">
-  <p>Made with ❤️, lack of sleep, and a lot of coffee by <a href="https://github.com/afer-kamal">Aferiad Kamal</a></p>
+  <p>Made with ❤️, lack of sleep, and a lot of coffee by <a href="https://github.com/NacreousDawn596">Aferiad Kamal</a></p>
 </div>
