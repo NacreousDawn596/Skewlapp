@@ -52,13 +52,6 @@ class ApiClient {
   }
 
   async checkAuthOrRelogin(): Promise<{ isAuthenticated: boolean; autoLoginAttempted: boolean; error: string | null }> {
-    console.log("[ApiClient] Checking auth status...");
-
-    if (this.client.auth.isLoggedIn()) {
-      console.log("[ApiClient] Already logged in (valid session).");
-      return { isAuthenticated: true, autoLoginAttempted: false, error: null };
-    }
-
     this.client.auth.setLoginState(false);
 
     const creds = await this.getCredentials();
