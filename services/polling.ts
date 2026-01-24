@@ -26,6 +26,7 @@ export interface PollSettings {
   notifyNotes: boolean;
   notifyAbsences: boolean;
   notifySanctions: boolean;
+  notificationsEnabled: boolean;
 }
 
 const DEFAULT_SETTINGS: PollSettings = {
@@ -33,6 +34,7 @@ const DEFAULT_SETTINGS: PollSettings = {
   notifyNotes: true,
   notifyAbsences: true,
   notifySanctions: true,
+  notificationsEnabled: true,
 };
 
 export const getPollingSettings = async (): Promise<PollSettings> => {
@@ -299,9 +301,14 @@ export const pollEndpoint = async (
 
     console.log(`[Polling] ${endpoint} update check. Silent: ${silent}`);
 
-    if (!silent) {
-      const changes = detectChanges(endpoint, oldData || (Array.isArray(newData) ? [] : {}), newData, settings);
-
+          if (!silent) {
+            if (!settings.notificationsEnabled) {
+              console.log("[Polling] Notifications are globally disabled. Skipping notifications.");
+              await setCachedData(endpoint, newData);
+              return;
+            }
+    
+            const changes = detectChanges(endpoint, oldData || (Array.isArray(newData) ? [] : {}), newData, settings);
       for (const activity of changes) {
         await addActivity(activity);
 

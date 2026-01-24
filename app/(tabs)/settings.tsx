@@ -254,6 +254,22 @@ export default function SettingsScreen() {
                 <Bell size={scaled(20)} color={theme.accent} />
               </View>
               <View style={styles.settingContent}>
+                <Text style={styles.settingTitle}>All Notifications</Text>
+                <Text style={styles.settingSubtitle}>Enable or disable all app notifications</Text>
+              </View>
+              <Switch
+                value={settingsQuery.data?.notificationsEnabled ?? true}
+                onValueChange={(value) =>
+                  updateSettingsMutation.mutate({ notificationsEnabled: value })
+                }
+                trackColor={{ false: theme.muted, true: theme.accent }}
+              />
+            </View>
+            <View style={styles.settingItem}>
+              <View style={styles.iconContainer}>
+                <Bell size={scaled(20)} color={theme.accent} />
+              </View>
+              <View style={styles.settingContent}>
                 <Text style={styles.settingTitle}>Grade Updates</Text>
                 <Text style={styles.settingSubtitle}>New marks and modifications</Text>
               </View>
