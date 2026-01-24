@@ -21,25 +21,23 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
 
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v1
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
 
-      - name: Install deps
-        run: bun install --legacy-peer-deps
-
-      - name: Install Expo & EAS
+      - name: Install Expo & EAS CLI
         run: |
-          bunx expo --version
-          bunx eas --version
+          npx expo --version
+          npx eas --version
 
       - name: Build Android APK
-        run: bunx eas build -p android --profile preview --non-interactive --json > apk.json
+        run: npx eas build -p android --profile preview --non-interactive --json > apk.json
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: Build Android AAB
-        run: bunx eas build -p android --profile production --non-interactive --json > aab.json
+        run: npx eas build -p android --profile production --non-interactive --json > aab.json
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
