@@ -26,10 +26,11 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
 
-      - name: Install Expo & EAS CLI
+      - name: Check Expo & EAS
         run: |
           npx expo --version
           npx eas --version
+
 
       - name: Build Android APK
         run: npx eas build -p android --profile preview --non-interactive --json > apk.json
