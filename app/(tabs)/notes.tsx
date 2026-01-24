@@ -27,7 +27,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { usePolling } from "@/contexts/PollingContext";
 import { useQuery } from "@tanstack/react-query";
-import { getCachedData } from "@/services/polling";
+import { getCachedData } from "@/services/cache";
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);

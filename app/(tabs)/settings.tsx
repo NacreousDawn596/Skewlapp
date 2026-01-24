@@ -343,8 +343,8 @@ export default function SettingsScreen() {
 
         <View style={styles.creditsContainer}>
           <Text style={styles.creditsText}>
-            {/* by Aferiad Kamal and El Banane Nada */}
-            Aferiad Kamal
+            by Aferiad Kamal and El Banane Nada
+            {/* Aferiad Kamal */}
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
             <Text style={styles.creditsText}>made with lack of sleep, caffeine and </Text>
