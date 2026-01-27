@@ -76,10 +76,16 @@ export const [PollingProvider, usePolling] =
         clearInterval(intervalRef.current);
       }
 
-      setIsPolling(true);
       const wasFirst = isFirstPoll.current;
-      if (wasFirst) isFirstPoll.current = false;
-      await poll(wasFirst);
+      if (wasFirst) {
+        setIsPolling(true);
+        isFirstPoll.current = false;
+      }
+      try {
+        await poll(wasFirst);
+      } finally {
+        setIsPolling(false);
+      }
 
       const settings = await getPollingSettings();
       const intervalMs = Math.max(settings.interval, 45) * 60 * 1000; // Minutes to ms

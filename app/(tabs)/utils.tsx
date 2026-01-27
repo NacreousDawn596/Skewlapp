@@ -65,12 +65,9 @@ export default function UtilsScreen() {
     queryFn: async () => {
       const start = Date.now();
       try {
-        const res = await fetch("https://schoolapp.ensam-umi.ac.ma/login", {
-          method: 'GET',
-          headers: { 'Cache-Control': 'no-cache' }
-        });
+        const res = await schoolAppClient.getFilieres();
         return {
-          online: res.ok || res.status < 400,
+          online: !!res,
           latency: Date.now() - start,
           time: new Date().toLocaleTimeString()
         };

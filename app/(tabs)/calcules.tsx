@@ -107,6 +107,9 @@ export default function CalculesScreen() {
     queryFn: () => schoolAppClient.getFilieres(),
     staleTime: Infinity,
     gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const modulesLookupQuery = useQuery({
@@ -115,6 +118,9 @@ export default function CalculesScreen() {
     enabled: !!selFiliere,
     staleTime: Infinity,
     gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const currentElemsQuery = useQuery({
@@ -122,6 +128,9 @@ export default function CalculesScreen() {
     queryFn: () => getCachedData("currentElems"),
     staleTime: Infinity,
     gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const historyElemsQuery = useQuery({
@@ -129,6 +138,9 @@ export default function CalculesScreen() {
     queryFn: () => getCachedData("allElems"),
     staleTime: Infinity,
     gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   useEffect(() => {
@@ -196,10 +208,11 @@ export default function CalculesScreen() {
         let nEX = parseFloat(String(ex).replace(',', '.')) || 0;
 
         // Apply RATT logic if available and valid
-        const nRATT = parseFloat(String(res?.RATT).replace(',', '.')) || null;
-        if (nRATT !== null && !isNaN(nRATT)) {
+        const nRATT = parseFloat(String(res?.RATT).replace(',', '.'));
+        if (!isNaN(nRATT) && nRATT > 0) {
           if (nCC > 0) nCC = Math.max(nCC, nRATT);
-          nEX = nRATT;
+          if (!isNaN(nEX) && nEX > 0) nEX = Math.max(nEX, nRATT);
+          else nEX = nRATT;
           if (nTP > 0) nTP = Math.max(nTP, nRATT);
         }
         let eAvg = 0;

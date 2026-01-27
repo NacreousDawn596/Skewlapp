@@ -261,11 +261,13 @@ export default function NotesScreen() {
       );
     }
 
+    const mappings = (moduleMappings && typeof moduleMappings === 'object') ? moduleMappings : {};
+
     return data.map((item, index) => {
       const codeKey = item.CodeElem || item.CodeMod || item.Semestre || item.Niveau || "Unknown";
       const noteVal = getVal(item);
       const gradeStr = item.note || item.Moy || item.Moy_Annee || item.Moy_SEM || "--";
-      const props = { key: index, item: { ...item, noteVal, gradeStr, code: codeKey }, name: moduleMappings?.[codeKey], theme, styles, category: selectedCategory };
+      const props = { key: index, item: { ...item, noteVal, gradeStr, code: codeKey }, name: mappings[codeKey], theme, styles, category: selectedCategory };
       if (selectedCategory === "currentElems" || selectedCategory === "allElems") return <NoteElementItem {...props} />;
       if (selectedCategory === "currentMods" || selectedCategory === "allMods") return <NoteModuleItem {...props} />;
       return <NoteSummaryItem {...props} />;

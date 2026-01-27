@@ -36,6 +36,36 @@ const DEFAULT_SETTINGS: PollSettings = {
   notificationsEnabled: true,
 };
 
+const lastFetchTime: Record<PollEndpoint, number> = {
+  currentElems: 0,
+  currentMods: 0,
+  allElems: 0,
+  allMods: 0,
+  semestres: 0,
+  annees: 0,
+  absences: 0,
+  sanctions: 0,
+};
+
+const fetchOnceEndpoints: Set<PollEndpoint> = new Set([
+  "allElems",
+  "allMods",
+  "semestres",
+  "annees",
+  "sanctions",
+]);
+
+const fetchDependencies: Record<PollEndpoint, PollEndpoint[]> = {
+  currentElems: [],
+  currentMods: ["semestres"],
+  allElems: [],
+  allMods: [],
+  semestres: ["annees"],
+  annees: [],
+  absences: ["sanctions"],
+  sanctions: [],
+};
+
 export const getPollingSettings = async (): Promise<PollSettings> => {
   try {
     const stored = await AsyncStorage.getItem("skewl_poll_settings");
@@ -57,6 +87,7 @@ export const savePollingSettings = async (settings: Partial<PollSettings>): Prom
     console.error("Failed to save polling settings:", error);
   }
 };
+
 const fetchMap: Record<PollEndpoint, () => Promise<any>> = {
   currentElems: () => schoolAppClient.getCurrentElemNote(),
   currentMods: () => schoolAppClient.getCurrentModNote(),
@@ -68,18 +99,56 @@ const fetchMap: Record<PollEndpoint, () => Promise<any>> = {
   sanctions: () => schoolAppClient.getSanctions(),
 };
 
+// Check if endpoint should be fetched based on intelligent caching rules
+const shouldFetchEndpoint = (
+  endpoint: PollEndpoint,
+  settings: PollSettings,
+  dependentEndpointChanged: boolean = false
+): boolean => {
+  // Always fetch regular endpoints on normal poll
+  if (!fetchOnceEndpoints.has(endpoint)) {
+    // currentMods polls 2x slower than currentElems
+    if (endpoint === "currentMods") {
+      const now = Date.now();
+      const intervalMs = settings.interval * 60 * 1000 * 2;
+      return now - lastFetchTime[endpoint] > intervalMs;
+    }
+    return true;
+  }
+
+  // Fetch-once endpoints only if dependent data changed
+  if (dependentEndpointChanged) {
+    return true;
+  }
+
+  // Already fetched, don't fetch again
+  const cached = lastFetchTime[endpoint] > 0;
+  if (cached) {
+    console.log(`[Polling] ${endpoint} already cached forever, skipping fetch.`);
+    return false;
+  }
+
+  return true;
+};
+
 export const pollEndpoint = async (
   endpoint: PollEndpoint,
   settings: PollSettings,
-  silent: boolean = false
-): Promise<void> => {
+  silent: boolean = false,
+  dependentEndpointChanged: boolean = false
+): Promise<boolean> => {
   try {
+    // Check if we should even fetch this endpoint
+    if (!shouldFetchEndpoint(endpoint, settings, dependentEndpointChanged)) {
+      return false;
+    }
+
     const netState = await Network.getNetworkStateAsync();
     if (!netState.isConnected || !netState.isInternetReachable) {
       console.log(`[Polling] Offline, skipping poll for ${endpoint}`);
       const cachedData = await getCachedData(endpoint);
       if (cachedData) {
-        return;
+        return false;
       }
     }
 
@@ -87,13 +156,13 @@ export const pollEndpoint = async (
     const fetchData = fetchMap[endpoint];
     if (!fetchData) {
       console.error(`No fetch handler for ${endpoint}`);
-      return;
+      return false;
     }
 
     const freshData = await fetchData();
     if (!freshData) {
       console.warn(`[Polling] No data returned for ${endpoint}. Possible network/session error.`);
-      return;
+      return false;
     }
 
     const newData = cleanData(freshData);
@@ -104,19 +173,15 @@ export const pollEndpoint = async (
 
     if (oldItemsCount > 0 && newItemsCount === 0) {
       console.warn(`[Polling] ${endpoint} returned empty but cache has ${oldItemsCount} items. Skipping cache update to prevent data loss.`);
-      return;
+      return false;
     }
 
     console.log(`[Polling] ${endpoint} update check. Silent: ${silent}`);
 
-    if (!silent) {
-        if (!settings.notificationsEnabled) {
-          console.log("[Polling] Notifications are globally disabled. Skipping notifications.");
-          await setCachedData(endpoint, newData);
-          return;
-        }
+    const dataChanged = JSON.stringify(oldData) !== JSON.stringify(newData);
 
-        const changes = detectChanges(endpoint, oldData || (Array.isArray(newData) ? [] : {}), newData, settings);
+    if (!silent && dataChanged && settings.notificationsEnabled) {
+      const changes = detectChanges(endpoint, oldData || (Array.isArray(newData) ? [] : {}), newData, settings);
 
       for (const activity of changes) {
         await addActivity(activity);
@@ -135,8 +200,11 @@ export const pollEndpoint = async (
     }
 
     await setCachedData(endpoint, newData);
+    lastFetchTime[endpoint] = Date.now();
+    return dataChanged;
   } catch (error) {
     console.error(`Failed to poll ${endpoint}:`, error);
+    return false;
   }
 };
 
@@ -149,9 +217,24 @@ export const pollAllEndpoints = async (silent: boolean = false): Promise<void> =
     return;
   }
 
-  await Promise.all(
-    [...POLL_ENDPOINTS].map((endpoint) => pollEndpoint(endpoint, settings, silent))
+  const regularEndpoints = ["currentElems", "currentMods", "absences"] as const;
+  const results = await Promise.all(
+    regularEndpoints.map((endpoint) => pollEndpoint(endpoint, settings, silent))
   );
+
+  const currentModsChanged = results[1]; // currentMods index
+  const absencesChanged = results[2]; // absences index
+
+  await pollEndpoint("semestres", settings, silent, currentModsChanged);
+  const semestresChanged = currentModsChanged || (lastFetchTime.semestres === 0);
+
+  await pollEndpoint("annees", settings, silent, semestresChanged);
+  await pollEndpoint("sanctions", settings, silent, absencesChanged);
+
+  // Fetch once on first run
+  await pollEndpoint("allElems", settings, silent, false);
+  await pollEndpoint("allMods", settings, silent, false);
+
   if (silent) {
     await new Promise(r => setTimeout(r, 2000));
     await pollEndpoint("absences", settings, true);
