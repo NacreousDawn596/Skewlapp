@@ -106,22 +106,29 @@ export default function CalculesScreen() {
     queryKey: ["all_filieres"],
     queryFn: () => schoolAppClient.getFilieres(),
     staleTime: Infinity,
+    gcTime: Infinity,
   });
 
   const modulesLookupQuery = useQuery({
     queryKey: ["lookup_modules_calc", selNiveau, selFiliere, selSemestre],
     queryFn: () => schoolAppClient.getModules(selNiveau, selFiliere, selSemestre),
     enabled: !!selFiliere,
+    staleTime: Infinity,
+    gcTime: Infinity,
   });
 
   const currentElemsQuery = useQuery({
     queryKey: ["current_elems_calc"],
     queryFn: () => getCachedData("currentElems"),
+    staleTime: Infinity,
+    gcTime: Infinity,
   });
 
   const historyElemsQuery = useQuery({
     queryKey: ["history_elems_calc"],
     queryFn: () => getCachedData("allElems"),
+    staleTime: Infinity,
+    gcTime: Infinity,
   });
 
   useEffect(() => {

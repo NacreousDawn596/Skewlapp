@@ -4,7 +4,7 @@ import { router } from "expo-router";
 import NetInfo from "@react-native-community/netinfo";
 import { useEffect, useState } from "react";
 
-import { schoolAppClient, secureStorage } from "../api/client";
+import { apiClient, schoolAppClient, secureStorage } from "../api/client";
 import { clearAllCache } from "../services/cache";
 import { UserProfile } from "../types/api";
 
@@ -29,15 +29,57 @@ export const [AuthProvider, useAuth] =
 
     /**
      * AUTH CHECK (app startup)
-     * - offline: restore session from secureStorage
-     * - online: still restore locally (no forced validation)
-     * - NEVER re-login automatically
+     * - First check if we have stored credentials
+     * - If credentials exist, attempt auto-login
+     * - If no credentials, check for stored profile (offline mode)
      */
     const checkAuthQuery = useQuery({
       queryKey: ["auth", "check"],
       queryFn: async () => {
+        console.log("[AuthContext] Starting auth check...");
+        
+        // First, check if we have stored credentials
+        const credentials = await apiClient.getCredentials();
+        
+        if (credentials) {
+          console.log("[AuthContext] Found stored credentials, attempting auto-login...");
+          
+          // Check network connectivity
+          const net = await NetInfo.fetch();
+          
+          if (net.isConnected) {
+            // Online: attempt to login with stored credentials
+            try {
+              const success = await schoolAppClient.login(credentials.email, credentials.pass);
+              
+              if (success) {
+                console.log("[AuthContext] Auto-login successful!");
+                const profileData = await schoolAppClient.getProfile() as UserProfile | null;
+                
+                if (profileData) {
+                  await secureStorage.setItem(PROFILE_KEY, JSON.stringify(profileData));
+                  setProfile(profileData);
+                  setIsAuthenticated(true);
+                  
+                  return {
+                    isAuthenticated: true,
+                    autoLoginAttempted: true,
+                  };
+                }
+              }
+              
+              console.log("[AuthContext] Auto-login failed, credentials may be invalid");
+            } catch (error) {
+              console.error("[AuthContext] Auto-login error:", error);
+            }
+          } else {
+            console.log("[AuthContext] Offline mode, checking for stored profile...");
+          }
+        }
+        
+        // Fallback: check for stored profile (offline mode or auto-login failed)
         const storedProfile = await secureStorage.getItem(PROFILE_KEY);
-
+        
         if (storedProfile) {
           const parsed = JSON.parse(storedProfile) as UserProfile;
           setProfile(parsed);
@@ -45,10 +87,11 @@ export const [AuthProvider, useAuth] =
 
           return {
             isAuthenticated: true,
-            autoLoginAttempted: true,
+            autoLoginAttempted: !!credentials,
           };
         }
 
+        console.log("[AuthContext] No stored credentials or profile found");
         return {
           isAuthenticated: false,
           autoLoginAttempted: false,
@@ -59,6 +102,7 @@ export const [AuthProvider, useAuth] =
 
     /**
      * LOGIN (ONLINE ONLY)
+     * Now stores credentials securely for auto-login
      */
     const loginMutation = useMutation({
       mutationFn: async ({
@@ -90,6 +134,10 @@ export const [AuthProvider, useAuth] =
           throw new Error("Login succeeded but profile fetch failed.");
         }
 
+        // Store credentials securely for auto-login
+        await apiClient.saveCredentials(email, password);
+        
+        // Store profile
         await secureStorage.setItem(
           PROFILE_KEY,
           JSON.stringify(profileData)
@@ -110,18 +158,22 @@ export const [AuthProvider, useAuth] =
 
     /**
      * LOGOUT
+     * Now clears credentials in addition to profile and cache
      */
     const logoutMutation = useMutation({
       mutationFn: async () => {
+        console.log("[AuthContext] Logging out - clearing all user data...");
         await Promise.all([
-          secureStorage.removeItem(PROFILE_KEY),
-          clearAllCache(),
+          apiClient.clearCredentials(),  // Clear stored credentials
+          secureStorage.removeItem(PROFILE_KEY),  // Clear profile
+          clearAllCache(),  // Clear all cached data
         ]);
       },
       onSuccess: () => {
         setProfile(null);
         setIsAuthenticated(false);
         router.replace("/login");
+        console.log("[AuthContext] Logout complete");
       },
     });
 

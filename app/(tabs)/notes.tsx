@@ -171,24 +171,38 @@ export default function NotesScreen() {
     return `S${digit}`;
   };
 
+  const getVal = (item: any) => {
+    const v = item.note ?? item.Moy ?? item.Note ?? item.Moyenne ?? item["Moy SEM"] ?? item["Moy Année"] ?? item["Moy Annee"];
+    if (v === null || v === undefined || v === "" || v === "--") return null;
+    return typeof v === 'string' ? parseFloat(v.replace(',', '.')) : v;
+  };
+
+  // Extract targets from data to use as stable cache key
+  const getTargets = (): string[] => {
+    const data = dataQuery.data as any[];
+    if (!data || !Array.isArray(data) || !profile?.administrative_info) return [];
+    const targets = new Set<string>();
+    data.forEach(item => {
+      const code = item.CodeElem || item.CodeMod;
+      if (code) {
+        const S = getSemesterFromCode(code, !!item.CodeElem);
+        const N = getNiveauFromSemestre(S);
+        const admin = profile.administrative_info;
+        const F = admin.Filière || admin.Filiere;
+        if (N && F && S) targets.add(`${N}|${F}|${S}`);
+      }
+    });
+    return Array.from(targets).sort();
+  };
+
+  const targets = getTargets();
+
   const { data: moduleMappings } = useQuery({
-    queryKey: ["global_name_mappings", dataQuery.data, profile?.administrative_info],
+    queryKey: ["global_name_mappings", targets],
     queryFn: async () => {
-      const data = dataQuery.data as any[];
-      if (!data || !Array.isArray(data) || !profile?.administrative_info) return {};
-      const targets = new Set<string>();
-      data.forEach(item => {
-        const code = item.CodeElem || item.CodeMod;
-        if (code) {
-          const S = getSemesterFromCode(code, !!item.CodeElem);
-          const N = getNiveauFromSemestre(S);
-          const admin = profile.administrative_info;
-          const F = admin.Filière || admin.Filiere;
-          if (N && F && S) targets.add(`${N}|${F}|${S}`);
-        }
-      });
+      if (targets.length === 0) return {};
       const mapping: Record<string, string> = {};
-      await Promise.all([...targets].map(async (target) => {
+      await Promise.all(targets.map(async (target) => {
         const [N, F, S] = target.split("|");
         try {
           const modulesObj = await schoolAppClient.getModules(N, F, S);
@@ -206,15 +220,10 @@ export default function NotesScreen() {
       }));
       return mapping;
     },
-    enabled: !!dataQuery.data && !!profile?.administrative_info,
+    enabled: targets.length > 0,
     staleTime: Infinity,
+    gcTime: Infinity,
   });
-
-  const getVal = (item: any) => {
-    const v = item.note ?? item.Moy ?? item.Note ?? item.Moyenne ?? item["Moy SEM"] ?? item["Moy Année"] ?? item["Moy Annee"];
-    if (v === null || v === undefined || v === "" || v === "--") return null;
-    return typeof v === 'string' ? parseFloat(v.replace(',', '.')) : v;
-  };
 
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
