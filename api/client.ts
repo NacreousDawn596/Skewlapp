@@ -59,8 +59,6 @@ class ApiClient {
       return { isAuthenticated: true, autoLoginAttempted: false, error: null };
     }
 
-    this.client.auth.setLoginState(false);
-
     const creds = await this.getCredentials();
     if (creds) {
       console.log(`[ApiClient] Session lost or not started. Auto-logging in for ${creds.email}...`);

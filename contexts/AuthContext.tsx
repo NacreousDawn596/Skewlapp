@@ -163,6 +163,7 @@ export const [AuthProvider, useAuth] =
     const logoutMutation = useMutation({
       mutationFn: async () => {
         console.log("[AuthContext] Logging out - clearing all user data...");
+        
         await Promise.all([
           apiClient.clearCredentials(),  // Clear stored credentials
           secureStorage.removeItem(PROFILE_KEY),  // Clear profile

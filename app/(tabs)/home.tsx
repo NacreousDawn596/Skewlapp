@@ -72,19 +72,33 @@ export default function HomeScreen() {
   const netInfo = useNetInfo();
 
   const activityQuery = useQuery({
-    queryKey: ["activity", lastPollTime],
+    queryKey: ["activity"],
     queryFn: getActivityFeed,
-    refetchInterval: 10000,
+    staleTime: Infinity,
+    gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const absencesQuery = useQuery({
-    queryKey: ["absences_summary", lastPollTime],
+    queryKey: ["absences_summary"],
     queryFn: () => getCachedData("absences"),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const sanctionsQuery = useQuery({
-    queryKey: ["sanctions_summary", lastPollTime],
+    queryKey: ["sanctions_summary"],
     queryFn: () => getCachedData("sanctions"),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const pollingSettingsQuery = useQuery({

@@ -11,6 +11,7 @@ import {
   Dimensions,
   ActivityIndicator,
   RefreshControl,
+  Modal,
 } from "react-native";
 import { useTheme } from "@/themes/ThemeContext";
 import { Stack } from "expo-router";
@@ -22,12 +23,13 @@ import {
   Layers,
   History,
   Calendar,
-  Layers2
+  Layers2,
+  X,
 } from "lucide-react-native";
 import { useAuth } from "@/contexts/AuthContext";
 import { usePolling } from "@/contexts/PollingContext";
 import { useQuery } from "@tanstack/react-query";
-import { getCachedData } from "@/services/cache";
+import { getCachedData, getCachedElementNames, setCachedElementNames } from "@/services/cache";
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -44,7 +46,7 @@ interface MenuItem {
   color: string;
 }
 
-const NoteElementItem = ({ item, name, theme, styles, category }: any) => {
+const NoteElementItem = ({ item, name, theme, styles, category, onStatsPress }: any) => {
   const isPassing = (typeof item.noteVal === 'number' && item.noteVal >= 11) || item.gradeStr === "V";
   return (
     <View style={styles.dataCard}>
@@ -53,29 +55,29 @@ const NoteElementItem = ({ item, name, theme, styles, category }: any) => {
           <Text style={styles.dataTitle}>{name || item.code}</Text>
           <Text style={styles.dataMeta}>{item.code} {item.AU ? `• ${item.AU}` : ""}</Text>
         </View>
-        <View style={{ alignItems: 'flex-end' }}>
+        <TouchableOpacity style={{ alignItems: 'flex-end' }} onPress={() => onStatsPress("element", item)}>
           <Text style={[styles.dataGrade, { color: isPassing ? "#6BCB77" : theme.accent, fontSize: category === "currentElems" ? 22 : 18 }]}>
             {item.gradeStr}
           </Text>
-        </View>
+        </TouchableOpacity>
       </View>
 
       {category === "currentElems" && (
         <View style={styles.gradeGrid}>
           {[
-            { label: "CC", val: item.CC },
-            { label: "EX", val: item.EX },
-            { label: "TP", val: item.TP },
-            { label: "SO", val: item.MoySO },
-            { label: "RAT", val: item.RAT },
-            { label: "MOY", val: item.Moy, bold: true }
+            { label: "CC", val: item.CC, type: "cc" },
+            { label: "EX", val: item.EX, type: "ex" },
+            { label: "TP", val: item.TP, type: "tp" },
+            { label: "SO", val: item.MoySO, type: null },
+            { label: "RAT", val: item.RAT, type: null },
+            { label: "MOY", val: item.Moy, bold: true, type: "moy" }
           ].map((g, i) => (
-            <View key={i} style={styles.gradeBox}>
+            <TouchableOpacity key={i} style={styles.gradeBox} onPress={() => g.type ? onStatsPress("element", item, g.type) : null}>
               <Text style={styles.gradeLabel}>{g.label}</Text>
               <Text style={[styles.gradeVal, g.bold && { color: isPassing ? "#6BCB77" : theme.accent, fontWeight: '800' }]}>
                 {g.val ?? "--"}
               </Text>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
       )}
@@ -83,10 +85,10 @@ const NoteElementItem = ({ item, name, theme, styles, category }: any) => {
   );
 };
 
-const NoteModuleItem = ({ item, name, theme, styles }: any) => {
+const NoteModuleItem = ({ item, name, theme, styles, onStatsPress }: any) => {
   const isPassing = (typeof item.noteVal === 'number' && item.noteVal >= 11) || item.gradeStr === "V";
   return (
-    <View style={styles.dataCard}>
+    <TouchableOpacity style={styles.dataCard} onPress={() => onStatsPress("module", item)}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
         <View style={{ flex: 1 }}>
           <Text style={styles.dataTitle}>{name || item.code}</Text>
@@ -99,7 +101,7 @@ const NoteModuleItem = ({ item, name, theme, styles }: any) => {
           {item.Dec && <Text style={styles.dataMeta}>{item.Dec}</Text>}
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 };
 
@@ -136,12 +138,40 @@ export default function NotesScreen() {
   const { theme } = useTheme();
   const { profile } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  const [statsModalVisible, setStatsModalVisible] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<any>(null);
+  const [statsType, setStatsType] = useState<"cc" | "ex" | "tp" | "moy">("moy");
+  const [itemType, setItemType] = useState<"element" | "module" | "semester" | "year">("element");
   const { lastPollTime, isPolling, poll } = usePolling();
+  const [hasPolledCategory, setHasPolledCategory] = useState<Set<Category>>(new Set());
+
+  // Trigger poll once per category if needed
+  useEffect(() => {
+    if (!selectedCategory || hasPolledCategory.has(selectedCategory)) {
+      return;
+    }
+    
+    const checkAndPoll = async () => {
+      const cached = await getCachedData(selectedCategory);
+      if (!cached) {
+        console.log(`[Notes] No cache for ${selectedCategory}, triggering poll...`);
+        await poll(false);
+        setHasPolledCategory(prev => new Set([...prev, selectedCategory]));
+      }
+    };
+    
+    void checkAndPoll();
+  }, [selectedCategory, poll, hasPolledCategory]);
 
   const dataQuery = useQuery({
-    queryKey: ["notes_data", selectedCategory, lastPollTime],
+    queryKey: ["notes_data", selectedCategory],
     queryFn: () => (selectedCategory ? getCachedData(selectedCategory) : null),
     enabled: !!selectedCategory,
+    staleTime: Infinity,
+    gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const handleCategoryPress = (category: Category) => {
@@ -196,10 +226,20 @@ export default function NotesScreen() {
   };
 
   const targets = getTargets();
+  // Convert targets array to stable string for cache key
+  const targetsKey = targets.join("|");
 
   const { data: moduleMappings } = useQuery({
-    queryKey: ["global_name_mappings", targets],
+    queryKey: ["global_name_mappings", targetsKey],
     queryFn: async () => {
+      // First try to get from permanent cache
+      const cachedNames = await getCachedElementNames();
+      if (Object.keys(cachedNames).length > 0) {
+        console.log("[Notes] Using permanently cached element names");
+        return cachedNames;
+      }
+
+      // If not in permanent cache, fetch from API
       if (targets.length === 0) return {};
       const mapping: Record<string, string> = {};
       await Promise.all(targets.map(async (target) => {
@@ -218,11 +258,20 @@ export default function NotesScreen() {
           }
         } catch (e) { }
       }));
+
+      // Cache permanently
+      if (Object.keys(mapping).length > 0) {
+        await setCachedElementNames(mapping);
+      }
+
       return mapping;
     },
     enabled: targets.length > 0,
     staleTime: Infinity,
     gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const styles = StyleSheet.create({
@@ -243,8 +292,94 @@ export default function NotesScreen() {
     gradeGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.background, justifyContent: 'space-between' },
     gradeBox: { width: '30%', marginBottom: 8, alignItems: 'center' },
     gradeLabel: { fontSize: 10, fontWeight: '700', color: theme.muted, textTransform: 'uppercase', marginBottom: 2 },
-    gradeVal: { fontSize: 14, fontWeight: '600', color: theme.text }
+    gradeVal: { fontSize: 14, fontWeight: '600', color: theme.text },
+    modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
+    statsModal: { backgroundColor: theme.surface, borderRadius: 24, padding: 24, width: "85%", maxHeight: "80%", elevation: 10 },
+    statsHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+    statsTitle: { fontSize: 18, fontWeight: "800", color: theme.text, flex: 1 },
+    statsRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.background },
+    statsLabel: { fontSize: 13, fontWeight: "600", color: theme.muted, flex: 1 },
+    statsValue: { fontSize: 14, fontWeight: "700", color: theme.accent, textAlign: "right" },
   });
+
+  const { data: statsData, isLoading: statsLoading } = useQuery({
+    queryKey: ["element_stats", selectedItem?.CodeElem || selectedItem?.CodeMod, statsType, itemType],
+    queryFn: async () => {
+      if (!selectedItem) return null;
+      
+      try {
+        const code = selectedItem.CodeElem || selectedItem.CodeMod;
+        console.log("🔍 Stats Query - code:", code, "type:", statsType, "itemType:", itemType);
+        
+        if (!code) return null;
+
+        let stats = null;
+
+        if (itemType === "element") {
+          // Get Element instances from getCurrentElemNote (has methods)
+          console.log("🔍 Fetching current element notes...");
+          const elems = await schoolAppClient.getCurrentElemNote();
+          console.log("🔍 Got", elems?.length || 0, "current element notes");
+          
+          const elem = Array.isArray(elems) ? elems.find((e: any) => e.CodeElem === code) : null;
+          console.log("🔍 Element found?", !!elem);
+          
+          if (elem) {
+            console.log("🔍 Element type:", elem.constructor.name);
+            console.log("🔍 Element methods:", {
+              ccStats: typeof elem.ccStats,
+              exStats: typeof elem.exStats,
+              tpStats: typeof elem.tpStats,
+              moyStats: typeof elem.moyStats
+            });
+
+            if (statsType === "cc" && typeof elem.ccStats === "function") {
+              console.log("🔍 Calling ccStats()");
+              stats = await elem.ccStats();
+            } else if (statsType === "ex" && typeof elem.exStats === "function") {
+              console.log("🔍 Calling exStats()");
+              stats = await elem.exStats();
+            } else if (statsType === "tp" && typeof elem.tpStats === "function") {
+              console.log("🔍 Calling tpStats()");
+              stats = await elem.tpStats();
+            } else if (statsType === "moy" && typeof elem.moyStats === "function") {
+              console.log("🔍 Calling moyStats()");
+              stats = await elem.moyStats();
+            }
+          }
+        } else if (itemType === "module") {
+          // Get Module instances from getCurrentModNote
+          console.log("🔍 Fetching current module notes...");
+          const mods = await schoolAppClient.getCurrentModNote();
+          console.log("🔍 Got", mods?.length || 0, "current module notes");
+          
+          const mod = Array.isArray(mods) ? mods.find((m: any) => m.CodeMod === code) : null;
+          console.log("🔍 Module found?", !!mod, "has stats?", mod?.stats ? "yes" : "no");
+          
+          if (mod && typeof mod.stats === "function") {
+            console.log("🔍 Calling module stats()");
+            stats = await mod.stats();
+          }
+        }
+
+        console.log("🔍 Final stats:", stats);
+        return stats || null;
+      } catch (e) {
+        console.error("❌ Failed to fetch stats:", e);
+        return null;
+      }
+    },
+    enabled: statsModalVisible && !!selectedItem,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+
+  const handleStatsPress = (type: "element" | "module" | "semester" | "year", item: any, subType?: "cc" | "ex" | "tp" | "moy") => {
+    setSelectedItem(item);
+    setItemType(type);
+    setStatsType(subType || "moy");
+    setStatsModalVisible(true);
+  };
 
   const renderContent = () => {
     const data = (dataQuery.data as any[]) || [];
@@ -267,7 +402,7 @@ export default function NotesScreen() {
       const codeKey = item.CodeElem || item.CodeMod || item.Semestre || item.Niveau || "Unknown";
       const noteVal = getVal(item);
       const gradeStr = item.note || item.Moy || item.Moy_Annee || item.Moy_SEM || "--";
-      const props = { key: index, item: { ...item, noteVal, gradeStr, code: codeKey }, name: mappings[codeKey], theme, styles, category: selectedCategory };
+      const props = { key: index, item: { ...item, noteVal, gradeStr, code: codeKey }, name: mappings[codeKey], theme, styles, category: selectedCategory, onStatsPress: handleStatsPress };
       if (selectedCategory === "currentElems" || selectedCategory === "allElems") return <NoteElementItem {...props} />;
       if (selectedCategory === "currentMods" || selectedCategory === "allMods") return <NoteModuleItem {...props} />;
       return <NoteSummaryItem {...props} />;
@@ -327,6 +462,49 @@ export default function NotesScreen() {
           </View>
         ) : renderContent()}
       </ScrollView>
+
+      <Modal visible={statsModalVisible} transparent={true} animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.statsModal}>
+            <ScrollView>
+              <View style={styles.statsHeader}>
+                <Text style={styles.statsTitle}>{moduleMappings?.[selectedItem?.code] || selectedItem?.Intitule || selectedItem?.code} ({selectedItem?.code})</Text>
+                <TouchableOpacity onPress={() => setStatsModalVisible(false)}>
+                  <X size={24} color={theme.text} />
+                </TouchableOpacity>
+              </View>
+
+              {statsLoading ? (
+                <ActivityIndicator color={theme.accent} style={{ marginVertical: 20 }} />
+              ) : statsData ? (
+                <View>
+                  {Object.entries(statsData).map(([key, value]: [string, any], index) => {
+                    const keyLower = key.toLowerCase();
+                    const isImportantMetric = keyLower === "votre_note" || keyLower === "moyenne_promo" || keyLower === "min" || keyLower === "max";
+                    const numValue = typeof value === 'number' ? value : null;
+                    let valueColor = theme.accent;
+                    
+                    if (isImportantMetric && numValue !== null) {
+                      valueColor = numValue < 11 ? "#FF6B6B" : "#6BCB77";
+                    }
+                    
+                    return (
+                      <View key={index} style={styles.statsRow}>
+                        <Text style={styles.statsLabel}>{key}</Text>
+                        <Text style={[styles.statsValue, { color: valueColor }]}>
+                          {typeof value === 'number' ? (Number.isInteger(value) ? value : value.toFixed(2)) : value || "N/A"}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : (
+                <Text style={[styles.dataMeta, { marginVertical: 20, textAlign: "center" }]}>Aucune statistique disponible</Text>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

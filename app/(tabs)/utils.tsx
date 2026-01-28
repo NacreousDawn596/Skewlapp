@@ -15,6 +15,7 @@ import { useTheme } from "@/themes/ThemeContext";
 import { Stack } from "expo-router";
 import { schoolAppClient } from "@/api/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNetInfo } from "@react-native-community/netinfo";
 import {
   ChevronRight,
   ChevronLeft,
@@ -31,6 +32,7 @@ import {
   ChevronDown
 } from "lucide-react-native";
 import { useQuery } from "@tanstack/react-query";
+import { getCachedData, getCachedModules, setCachedModules } from "@/services/cache";
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -48,16 +50,61 @@ export default function UtilsScreen() {
   const [selNiveau, setSelNiveau] = useState("1A");
   const [selFiliere, setSelFiliere] = useState("");
   const [selSemestre, setSelSemestre] = useState("S1");
+  const netInfo = useNetInfo();
+
   const filieresQuery = useQuery({
     queryKey: ["all_filieres"],
-    queryFn: () => schoolAppClient.getFilieres(),
+    queryFn: () => getCachedData("filieres"),
     staleTime: Infinity,
+    refetchOnReconnect: false,
   });
 
   const modulesLookupQuery = useQuery({
     queryKey: ["lookup_modules", selNiveau, selFiliere, selSemestre],
-    queryFn: () => schoolAppClient.getModules(selNiveau, selFiliere, selSemestre),
+    queryFn: async () => {
+      const cacheKey = `${selNiveau}_${selFiliere}_${selSemestre}`;
+      console.log(`[Utils] Loading modules for ${cacheKey}`);
+      
+      try {
+        // Try to fetch fresh data first
+        console.log(`[Utils] Attempting fresh fetch for ${cacheKey}...`);
+        const freshData = await schoolAppClient.getModules(selNiveau, selFiliere, selSemestre);
+        const hasContent = freshData && ((Array.isArray(freshData) && freshData.length > 0) || (typeof freshData === 'object' && Object.keys(freshData).length > 0));
+        
+        if (hasContent) {
+          console.log(`[Utils] Got fresh data for ${cacheKey}`);
+          // Only cache if we have internet and data is not empty
+          if (netInfo.isConnected) {
+            await setCachedModules(selNiveau, selFiliere, selSemestre, freshData);
+            console.log(`[Utils] Cached fresh data for ${cacheKey}`);
+          } else {
+            console.log(`[Utils] Offline, not caching for ${cacheKey}`);
+          }
+          return freshData;
+        }
+      } catch (e) {
+        console.log(`[Utils] Fresh fetch failed for ${cacheKey}:`, e);
+      }
+      
+      // Try cache as fallback
+      console.log(`[Utils] Trying cache for ${cacheKey}...`);
+      const cachedData = await getCachedModules(selNiveau, selFiliere, selSemestre);
+      const hasCachedContent = cachedData && ((Array.isArray(cachedData) && cachedData.length > 0) || (typeof cachedData === 'object' && Object.keys(cachedData).length > 0));
+      
+      if (hasCachedContent) {
+        console.log(`[Utils] Using cached data for ${cacheKey}`);
+        return cachedData;
+      }
+      
+      console.log(`[Utils] No valid data found for ${cacheKey}`);
+      return null;
+    },
     enabled: activeUtil === "modules" && !!selFiliere,
+    staleTime: Infinity,
+    gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const platformStatusQuery = useQuery({
@@ -65,9 +112,12 @@ export default function UtilsScreen() {
     queryFn: async () => {
       const start = Date.now();
       try {
-        const res = await schoolAppClient.getFilieres();
+        const res = await fetch("https://schoolapp.ensam-umi.ac.ma/", {
+          method: 'HEAD',
+          cache: 'no-store',
+        });
         return {
-          online: !!res,
+          online: res.ok || res.status < 500,
           latency: Date.now() - start,
           time: new Date().toLocaleTimeString()
         };
@@ -77,6 +127,7 @@ export default function UtilsScreen() {
     },
     enabled: activeUtil === "status",
     refetchInterval: 15000,
+    refetchOnReconnect: true,
   });
 
   useEffect(() => {

@@ -16,6 +16,7 @@ export const POLL_ENDPOINTS = [
   "annees",
   "absences",
   "sanctions",
+  "filieres",
 ] as const;
 
 export type PollEndpoint = (typeof POLL_ENDPOINTS)[number];
@@ -45,6 +46,7 @@ const lastFetchTime: Record<PollEndpoint, number> = {
   annees: 0,
   absences: 0,
   sanctions: 0,
+  filieres: 0,
 };
 
 const fetchOnceEndpoints: Set<PollEndpoint> = new Set([
@@ -53,6 +55,7 @@ const fetchOnceEndpoints: Set<PollEndpoint> = new Set([
   "semestres",
   "annees",
   "sanctions",
+  "filieres",
 ]);
 
 const fetchDependencies: Record<PollEndpoint, PollEndpoint[]> = {
@@ -64,6 +67,7 @@ const fetchDependencies: Record<PollEndpoint, PollEndpoint[]> = {
   annees: [],
   absences: ["sanctions"],
   sanctions: [],
+  filieres: [],
 };
 
 export const getPollingSettings = async (): Promise<PollSettings> => {
@@ -88,6 +92,14 @@ export const savePollingSettings = async (settings: Partial<PollSettings>): Prom
   }
 };
 
+// Reset fetch times to force refetch of all endpoints
+export const resetFetchTimes = () => {
+  console.log("[Polling] Resetting fetch times - forcing full refetch on reconnection");
+  for (const endpoint of POLL_ENDPOINTS) {
+    lastFetchTime[endpoint] = 0;
+  }
+};
+
 const fetchMap: Record<PollEndpoint, () => Promise<any>> = {
   currentElems: () => schoolAppClient.getCurrentElemNote(),
   currentMods: () => schoolAppClient.getCurrentModNote(),
@@ -97,6 +109,7 @@ const fetchMap: Record<PollEndpoint, () => Promise<any>> = {
   annees: () => schoolAppClient.getAnnee(),
   absences: () => schoolAppClient.getAbsences(),
   sanctions: () => schoolAppClient.getSanctions(),
+  filieres: () => schoolAppClient.getFilieres(),
 };
 
 // Check if endpoint should be fetched based on intelligent caching rules
@@ -231,14 +244,9 @@ export const pollAllEndpoints = async (silent: boolean = false): Promise<void> =
   await pollEndpoint("annees", settings, silent, semestresChanged);
   await pollEndpoint("sanctions", settings, silent, absencesChanged);
 
-  // Fetch once on first run
+  // Fetch once on first run (fetch-once endpoints)
   await pollEndpoint("allElems", settings, silent, false);
   await pollEndpoint("allMods", settings, silent, false);
-
-  if (silent) {
-    await new Promise(r => setTimeout(r, 2000));
-    await pollEndpoint("absences", settings, true);
-    await pollEndpoint("currentElems", settings, true);
-  }
+  await pollEndpoint("filieres", settings, silent, false);
 };
 

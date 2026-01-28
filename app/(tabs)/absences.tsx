@@ -28,7 +28,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { usePolling } from "@/contexts/PollingContext";
 import { useQuery } from "@tanstack/react-query";
-import { getCachedData } from "@/services/cache";
+import { getCachedData, getCachedElementNames, setCachedElementNames } from "@/services/cache";
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -90,13 +90,23 @@ export default function AbsencesScreen() {
   const { lastPollTime, isPolling, poll } = usePolling();
 
   const absencesQuery = useQuery({
-    queryKey: ["absences_data", lastPollTime],
+    queryKey: ["absences_data"],
     queryFn: () => getCachedData("absences"),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const sanctionsQuery = useQuery({
-    queryKey: ["sanctions_data", lastPollTime],
+    queryKey: ["sanctions_data"],
     queryFn: () => getCachedData("sanctions"),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
   });
 
   const getNiveauFromSemestre = (S: string): string => {
@@ -116,8 +126,15 @@ export default function AbsencesScreen() {
   };
 
   const { data: moduleMappings } = useQuery({
-    queryKey: ["absence_name_mappings", absencesQuery.data, sanctionsQuery.data, profile?.administrative_info],
+    queryKey: ["absence_name_mappings", profile?.administrative_info],
     queryFn: async () => {
+      // First try permanent cache
+      const cachedNames = await getCachedElementNames();
+      if (Object.keys(cachedNames).length > 0) {
+        console.log("[Absences] Using permanently cached element names");
+        return cachedNames;
+      }
+
       const absences = (absencesQuery.data as any)?.details || [];
       const sanctions = Array.isArray(sanctionsQuery.data) ? sanctionsQuery.data : ((sanctionsQuery.data as any)?.details || []);
       if (!profile?.administrative_info) return {};
@@ -149,10 +166,20 @@ export default function AbsencesScreen() {
           }
         } catch (e) { }
       }));
+      
+      // Cache permanently
+      if (Object.keys(mapping).length > 0) {
+        await setCachedElementNames(mapping);
+      }
+
       return mapping;
     },
     enabled: (!!absencesQuery.data || !!sanctionsQuery.data) && !!profile?.administrative_info,
     staleTime: Infinity,
+    gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const styles = StyleSheet.create({

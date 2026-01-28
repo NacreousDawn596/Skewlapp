@@ -19,8 +19,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Stack } from "expo-router";
 import { schoolAppClient, secureStorage } from "@/api/client";
 import { useQuery } from "@tanstack/react-query";
-import { getCachedData } from "@/services/cache";
+import { getCachedData, getCachedModules, setCachedModules } from "@/services/cache";
 import { usePolling } from "@/contexts/PollingContext";
+import { useNetInfo } from "@react-native-community/netinfo";
 import {
   ChevronDown,
   ChevronUp,
@@ -95,6 +96,7 @@ export default function CalculesScreen() {
   const { theme } = useTheme();
   const { profile } = useAuth();
   const { lastPollTime, isPolling } = usePolling();
+  const netInfo = useNetInfo();
 
   const [selNiveau, setSelNiveau] = useState("1A");
   const [selFiliere, setSelFiliere] = useState("");
@@ -104,7 +106,7 @@ export default function CalculesScreen() {
 
   const filieresQuery = useQuery({
     queryKey: ["all_filieres"],
-    queryFn: () => schoolAppClient.getFilieres(),
+    queryFn: () => getCachedData("filieres"),
     staleTime: Infinity,
     gcTime: Infinity,
     refetchOnMount: false,
@@ -114,33 +116,90 @@ export default function CalculesScreen() {
 
   const modulesLookupQuery = useQuery({
     queryKey: ["lookup_modules_calc", selNiveau, selFiliere, selSemestre],
-    queryFn: () => schoolAppClient.getModules(selNiveau, selFiliere, selSemestre),
+    queryFn: async () => {
+      const cacheKey = `${selNiveau}_${selFiliere}_${selSemestre}`;
+      console.log(`[Calcules] Loading modules for ${cacheKey}`);
+      
+      try {
+        // Try to fetch fresh data first
+        console.log(`[Calcules] Attempting fresh fetch for ${cacheKey}...`);
+        const freshData = await schoolAppClient.getModules(selNiveau, selFiliere, selSemestre);
+        const hasContent = freshData && ((Array.isArray(freshData) && freshData.length > 0) || (typeof freshData === 'object' && Object.keys(freshData).length > 0));
+        
+        if (hasContent) {
+          console.log(`[Calcules] Got fresh data for ${cacheKey}`);
+          // Only cache if we have internet and data is not empty
+          if (netInfo.isConnected) {
+            await setCachedModules(selNiveau, selFiliere, selSemestre, freshData);
+            console.log(`[Calcules] Cached fresh data for ${cacheKey}`);
+          } else {
+            console.log(`[Calcules] Offline, not caching for ${cacheKey}`);
+          }
+          return freshData;
+        }
+      } catch (e) {
+        console.log(`[Calcules] Fresh fetch failed for ${cacheKey}:`, e);
+      }
+      
+      // Try cache as fallback
+      console.log(`[Calcules] Trying cache for ${cacheKey}...`);
+      const cachedData = await getCachedModules(selNiveau, selFiliere, selSemestre);
+      const hasCachedContent = cachedData && ((Array.isArray(cachedData) && cachedData.length > 0) || (typeof cachedData === 'object' && Object.keys(cachedData).length > 0));
+      
+      if (hasCachedContent) {
+        console.log(`[Calcules] Using cached data for ${cacheKey}`);
+        return cachedData;
+      }
+      
+      console.log(`[Calcules] No valid data found for ${cacheKey}`);
+      return null;
+    },
     enabled: !!selFiliere,
     staleTime: Infinity,
     gcTime: Infinity,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchOnReconnect: true,
   });
 
   const currentElemsQuery = useQuery({
     queryKey: ["current_elems_calc"],
-    queryFn: () => getCachedData("currentElems"),
+    queryFn: async () => {
+      const cached = await getCachedData("currentElems");
+      if (cached) {
+        console.log("[Calcules] Using cached currentElems");
+        return cached;
+      }
+      console.log("[Calcules] No cache for currentElems, triggering poll...");
+      await poll(false);
+      const refreshed = await getCachedData("currentElems");
+      return refreshed || null;
+    },
     staleTime: Infinity,
     gcTime: Infinity,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchOnReconnect: true,
   });
 
   const historyElemsQuery = useQuery({
     queryKey: ["history_elems_calc"],
-    queryFn: () => getCachedData("allElems"),
+    queryFn: async () => {
+      const cached = await getCachedData("allElems");
+      if (cached) {
+        console.log("[Calcules] Using cached allElems");
+        return cached;
+      }
+      console.log("[Calcules] No cache for allElems, triggering poll...");
+      await poll(false);
+      const refreshed = await getCachedData("allElems");
+      return refreshed || null;
+    },
     staleTime: Infinity,
     gcTime: Infinity,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    refetchOnReconnect: true,
   });
 
   useEffect(() => {

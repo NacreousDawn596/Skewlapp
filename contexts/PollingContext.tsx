@@ -3,15 +3,17 @@ import * as TaskManager from "expo-task-manager";
 import createContextHook from "@nkzw/create-context-hook";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, AppStateStatus } from "react-native";
-import { getPollingSettings, pollAllEndpoints } from "../services/polling";
+import { useNetInfo } from "@react-native-community/netinfo";
+import { getPollingSettings, pollAllEndpoints, resetFetchTimes } from "../services/polling";
 import { useAuth } from "./AuthContext";
+import { apiClient } from "@/api/client";
 
 const BACKGROUND_POLL_TASK = "background-poll-task";
 
 TaskManager.defineTask(BACKGROUND_POLL_TASK, async () => {
   try {
     console.log("[BackgroundFetch] Task triggered");
-    await pollAllEndpoints();
+    await pollAllEndpoints(true); // silent: true to avoid duplicate notifications
     return BackgroundFetch.BackgroundFetchResult.NewData;
   } catch (error) {
     console.error("[BackgroundFetch] Task failed:", error);
@@ -30,12 +32,17 @@ interface PollingContextValue {
 export const [PollingProvider, usePolling] =
   createContextHook<PollingContextValue>(() => {
     const { isAuthenticated } = useAuth();
+    const netInfo = useNetInfo();
     const [isPolling, setIsPolling] = useState(false);
     const [lastPollTime, setLastPollTime] = useState<number | null>(null);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const appState = useRef<AppStateStatus>(AppState.currentState);
+    const wasOfflineRef = useRef(false);
 
     const isFirstPoll = useRef(true);
+
+    // Add flag to track if polling already started
+    const isPollingStartedRef = useRef(false);
 
     const poll = async (silent: boolean = false) => {
       console.log(`[PollingContext] Starting poll (Silent: ${silent})...`);
@@ -72,6 +79,9 @@ export const [PollingProvider, usePolling] =
     };
 
     const startPolling = useCallback(async () => {
+      if (isPollingStartedRef.current) return; // Prevent duplicate startup
+      isPollingStartedRef.current = true;
+
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
@@ -82,7 +92,7 @@ export const [PollingProvider, usePolling] =
         isFirstPoll.current = false;
       }
       try {
-        await poll(wasFirst);
+        await poll(!wasFirst); // FIX: invert silent value - first poll NOT silent
       } finally {
         setIsPolling(false);
       }
@@ -90,12 +100,11 @@ export const [PollingProvider, usePolling] =
       const settings = await getPollingSettings();
       const intervalMs = Math.max(settings.interval, 45) * 60 * 1000; // Minutes to ms
 
-      intervalRef.current = setInterval(poll, intervalMs);
-
-      void registerBackgroundTask();
+      intervalRef.current = setInterval(() => poll(true), intervalMs); // Subsequent polls silent
     }, []);
 
     const stopPolling = useCallback(() => {
+      isPollingStartedRef.current = false; // Reset flag
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
@@ -130,6 +139,40 @@ export const [PollingProvider, usePolling] =
         subscription.remove();
       };
     }, [isAuthenticated, startPolling, stopPolling]);
+
+    // Handle network reconnection - reset fetch times and poll everything
+    useEffect(() => {
+      if (!netInfo.isConnected) {
+        wasOfflineRef.current = true;
+        return;
+      }
+
+      // Just came back online
+      if (wasOfflineRef.current && netInfo.isConnected) {
+        console.log("[PollingContext] Network reconnected - resetting fetch times and polling...");
+        wasOfflineRef.current = false;
+
+        const handleReconnection = async () => {
+          try {
+            // Reset fetch times to force refetch of all cached endpoints
+            resetFetchTimes();
+
+            // Check auth status and auto-login if needed
+            const authStatus = await apiClient.checkAuthOrRelogin();
+            console.log("[PollingContext] Auth status after reconnection:", authStatus.isAuthenticated);
+
+            // If authenticated, poll all endpoints
+            if (authStatus.isAuthenticated) {
+              await poll(false);
+            }
+          } catch (e) {
+            console.error("[PollingContext] Reconnection handler error:", e);
+          }
+        };
+
+        void handleReconnection();
+      }
+    }, [netInfo.isConnected, poll]);
 
     return {
       isPolling,
