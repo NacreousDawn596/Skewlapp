@@ -12,7 +12,6 @@ import {
   resetFetchTimes,
 } from "../services/polling";
 import { useAuth } from "./AuthContext";
-import { apiClient } from "@/api/client";
 import { runSinglePoll } from "@/services/pollExecutor";
 
 const BACKGROUND_POLL_TASK = "background-poll-task";
@@ -42,16 +41,20 @@ TaskManager.defineTask(BACKGROUND_POLL_TASK, async () => {
     }
 
     try {
+      // 🔥 NEW: Background task just stops on UNAUTHORIZED
+      // It does NOT logout, does NOT mutate state, does NOT navigate
       await runSinglePoll(() => pollAllEndpoints(true));
       return BackgroundFetch.BackgroundFetchResult.NewData;
-    } catch {
-      const auth = await apiClient.checkAuthOrRelogin();
-      if (!auth.isAuthenticated) {
-        return BackgroundFetch.BackgroundFetchResult.Failed;
+    } catch (e: any) {
+      // 🔥 NEW: If UNAUTHORIZED, just stop silently
+      if (e.message === "UNAUTHORIZED") {
+        console.log("[BackgroundFetch] Session expired - stopping background work");
+        return BackgroundFetch.BackgroundFetchResult.NoData;
       }
-
-      await runSinglePoll(() => pollAllEndpoints(true));
-      return BackgroundFetch.BackgroundFetchResult.NewData;
+      
+      // Other errors
+      console.error("[BackgroundFetch] Error:", e);
+      return BackgroundFetch.BackgroundFetchResult.Failed;
     }
   } catch (e) {
     console.error("[BackgroundFetch] Fatal:", e);
@@ -79,7 +82,7 @@ interface PollingContextValue {
 
 export const [PollingProvider, usePolling] =
   createContextHook<PollingContextValue>(() => {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, handleUnauthorized } = useAuth();
     const netInfo = useNetInfo();
 
     const [isPolling, setIsPolling] = useState(false);
@@ -95,6 +98,7 @@ export const [PollingProvider, usePolling] =
     /*                         NETWORK SOURCE OF TRUTH                         */
     /* ---------------------------------------------------------------------- */
 
+    // 🔥 NEW: NetInfo is ONLY for UI - not for auth decisions
     const isNetworkReady =
       netInfo.isConnected === true &&
       netInfo.isInternetReachable === true;
@@ -109,12 +113,28 @@ export const [PollingProvider, usePolling] =
 
         await runSinglePoll(async () => {
           setIsPolling(true);
-          await pollAllEndpoints(silent);
-          setLastPollTime(Date.now());
-          setIsPolling(false);
+          
+          try {
+            // 🔥 NEW: Catch UNAUTHORIZED and handle it centrally
+            await pollAllEndpoints(silent);
+            setLastPollTime(Date.now());
+          } catch (e: any) {
+            if (e.message === "UNAUTHORIZED") {
+              console.warn("[Polling] Session expired during poll");
+              // 🔥 Stop polling immediately
+              stopPolling();
+              // 🔥 Call central handler (will logout and navigate)
+              await handleUnauthorized();
+            } else {
+              // Other errors - just log
+              console.error("[Polling] Error:", e);
+            }
+          } finally {
+            setIsPolling(false);
+          }
         });
       },
-      [isNetworkReady, isAuthenticated]
+      [isNetworkReady, isAuthenticated, handleUnauthorized]
     );
 
     /* ---------------------------------------------------------------------- */
@@ -180,6 +200,8 @@ export const [PollingProvider, usePolling] =
           appState.current.match(/inactive|background/) &&
           next === "active"
         ) {
+          // 🔥 NEW: Don't force logout on app resume
+          // Just try to poll - if auth is dead, polling will catch it
           if (isAuthenticated && isNetworkReady) {
             startPolling();
           }
@@ -221,18 +243,15 @@ export const [PollingProvider, usePolling] =
       if (wasOfflineRef.current && netInfo.isInternetReachable === true) {
         wasOfflineRef.current = false;
 
-        const handleReconnect = async () => {
-          resetFetchTimes();
-
-          const auth = await apiClient.checkAuthOrRelogin();
-          if (auth.isAuthenticated) {
-            await poll(false);
-          }
-        };
-
-        void handleReconnect();
+        // 🔥 NEW: Just reset fetch times and poll
+        // If auth is dead, polling will catch it
+        resetFetchTimes();
+        
+        if (isAuthenticated && isNetworkReady) {
+          poll(false);
+        }
       }
-    }, [netInfo.isInternetReachable, poll]);
+    }, [netInfo.isInternetReachable, poll, isAuthenticated, isNetworkReady]);
 
     /* ---------------------------------------------------------------------- */
 

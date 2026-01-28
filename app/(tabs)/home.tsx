@@ -38,6 +38,7 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
+import { withReactQueryAuthHandler } from "@/services/apiErrorHandler";
 
 dayjs.extend(relativeTime);
 
@@ -67,13 +68,17 @@ export default function HomeScreen() {
   const { theme } = useTheme();
   const scale = useFontScale();
   const scaled = (size: number) => size * scale;
-  const { profile } = useAuth();
+  const { profile, handleUnauthorized } = useAuth();
   const { lastPollTime, isPolling, poll } = usePolling();
   const netInfo = useNetInfo();
 
+  // 🔥 NEW: Wrapped with auth error handler
   const activityQuery = useQuery({
     queryKey: ["activity"],
-    queryFn: getActivityFeed,
+    queryFn: withReactQueryAuthHandler(
+      getActivityFeed,
+      handleUnauthorized
+    ),
     staleTime: Infinity,
     gcTime: Infinity,
     refetchOnMount: false,
@@ -81,9 +86,13 @@ export default function HomeScreen() {
     refetchOnReconnect: true,
   });
 
+  // 🔥 NEW: Wrapped with auth error handler
   const absencesQuery = useQuery({
     queryKey: ["absences_summary"],
-    queryFn: () => getCachedData("absences"),
+    queryFn: withReactQueryAuthHandler(
+      () => getCachedData("absences"),
+      handleUnauthorized
+    ),
     staleTime: Infinity,
     gcTime: Infinity,
     refetchOnMount: false,
@@ -91,9 +100,13 @@ export default function HomeScreen() {
     refetchOnReconnect: true,
   });
 
+  // 🔥 NEW: Wrapped with auth error handler
   const sanctionsQuery = useQuery({
     queryKey: ["sanctions_summary"],
-    queryFn: () => getCachedData("sanctions"),
+    queryFn: withReactQueryAuthHandler(
+      () => getCachedData("sanctions"),
+      handleUnauthorized
+    ),
     staleTime: Infinity,
     gcTime: Infinity,
     refetchOnMount: false,
@@ -533,9 +546,10 @@ export default function HomeScreen() {
           ) : (
             <View style={styles.emptyState}>
               <Bell size={40} color={theme.muted} />
-                              <Text style={styles.emptyStateText}>
-                                Aucune activité récente. Les mises à jour apparaîtront ici.
-                              </Text>            </View>
+              <Text style={styles.emptyStateText}>
+                Aucune activité récente. Les mises à jour apparaîtront ici.
+              </Text>
+            </View>
           )}
         </View>
       </ScrollView>

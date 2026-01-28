@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Network from 'expo-network';
-import { apiClient, schoolAppClient } from "../api/client";
+import { schoolAppClient } from "../api/client";
 import { ActivityItem } from "../types/api";
 import { scheduleNotification } from "./notifications";
 import { getCachedData, setCachedData, cleanData } from "./cache";
@@ -144,93 +144,98 @@ const shouldFetchEndpoint = (
   return true;
 };
 
+/**
+ * 🔥 NEW: Poll a single endpoint with proper UNAUTHORIZED propagation
+ * Throws UNAUTHORIZED if auth fails - caller must handle
+ */
 export const pollEndpoint = async (
   endpoint: PollEndpoint,
   settings: PollSettings,
   silent: boolean = false,
   dependentEndpointChanged: boolean = false
 ): Promise<boolean> => {
-  try {
-    // Check if we should even fetch this endpoint
-    if (!shouldFetchEndpoint(endpoint, settings, dependentEndpointChanged)) {
-      return false;
-    }
-
-    const netState = await Network.getNetworkStateAsync();
-    if (!netState.isConnected || !netState.isInternetReachable) {
-      console.log(`[Polling] Offline, skipping poll for ${endpoint}`);
-      const cachedData = await getCachedData(endpoint);
-      if (cachedData) {
-        return false;
-      }
-    }
-
-    console.log(`[Polling] Fetching ${endpoint}${silent ? ' (Silent)' : ''}...`);
-    const fetchData = fetchMap[endpoint];
-    if (!fetchData) {
-      console.error(`No fetch handler for ${endpoint}`);
-      return false;
-    }
-
-    const freshData = await fetchData();
-    if (!freshData) {
-      console.warn(`[Polling] No data returned for ${endpoint}. Possible network/session error.`);
-      return false;
-    }
-
-    const newData = cleanData(freshData);
-    const oldData = await getCachedData(endpoint);
-
-    const oldItemsCount = Array.isArray(oldData) ? oldData.length : (oldData as any)?.details?.length || 0;
-    const newItemsCount = Array.isArray(newData) ? newData.length : (newData as any)?.details?.length || 0;
-
-    if (oldItemsCount > 0 && newItemsCount === 0) {
-      console.warn(`[Polling] ${endpoint} returned empty but cache has ${oldItemsCount} items. Skipping cache update to prevent data loss.`);
-      return false;
-    }
-
-    console.log(`[Polling] ${endpoint} update check. Silent: ${silent}`);
-
-    const dataChanged = JSON.stringify(oldData) !== JSON.stringify(newData);
-
-    if (!silent && dataChanged && settings.notificationsEnabled) {
-      const changes = detectChanges(endpoint, oldData || (Array.isArray(newData) ? [] : {}), newData, settings);
-
-      for (const activity of changes) {
-        await addActivity(activity);
-
-        const shouldNotify =
-          (activity.type === "note" && settings.notifyNotes) ||
-          (activity.type === "absence" && settings.notifyAbsences) ||
-          (activity.type === "sanction" && settings.notifySanctions);
-
-        if (shouldNotify) {
-          await scheduleNotification(activity.title, activity.description, {
-            route: activity.route,
-          });
-        }
-      }
-    }
-
-    await setCachedData(endpoint, newData);
-    lastFetchTime[endpoint] = Date.now();
-    return dataChanged;
-  } catch (error) {
-    console.error(`Failed to poll ${endpoint}:`, error);
+  // Check if we should even fetch this endpoint
+  if (!shouldFetchEndpoint(endpoint, settings, dependentEndpointChanged)) {
     return false;
   }
+
+  const netState = await Network.getNetworkStateAsync();
+  if (!netState.isConnected || !netState.isInternetReachable) {
+    console.log(`[Polling] Offline, skipping poll for ${endpoint}`);
+    const cachedData = await getCachedData(endpoint);
+    if (cachedData) {
+      return false;
+    }
+  }
+
+  console.log(`[Polling] Fetching ${endpoint}${silent ? ' (Silent)' : ''}...`);
+  const fetchData = fetchMap[endpoint];
+  if (!fetchData) {
+    console.error(`No fetch handler for ${endpoint}`);
+    return false;
+  }
+
+  // 🔥 NEW: Let UNAUTHORIZED propagate - don't catch it here
+  const freshData = await fetchData();
+  
+  if (!freshData) {
+    console.warn(`[Polling] No data returned for ${endpoint}. Possible network/session error.`);
+    return false;
+  }
+
+  const newData = cleanData(freshData);
+  const oldData = await getCachedData(endpoint);
+
+  const oldItemsCount = Array.isArray(oldData) ? oldData.length : (oldData as any)?.details?.length || 0;
+  const newItemsCount = Array.isArray(newData) ? newData.length : (newData as any)?.details?.length || 0;
+
+  if (oldItemsCount > 0 && newItemsCount === 0) {
+    console.warn(`[Polling] ${endpoint} returned empty but cache has ${oldItemsCount} items. Skipping cache update to prevent data loss.`);
+    return false;
+  }
+
+  console.log(`[Polling] ${endpoint} update check. Silent: ${silent}`);
+
+  const dataChanged = JSON.stringify(oldData) !== JSON.stringify(newData);
+
+  if (!silent && dataChanged && settings.notificationsEnabled) {
+    const changes = detectChanges(endpoint, oldData || (Array.isArray(newData) ? [] : {}), newData, settings);
+
+    for (const activity of changes) {
+      await addActivity(activity);
+
+      const shouldNotify =
+        (activity.type === "note" && settings.notifyNotes) ||
+        (activity.type === "absence" && settings.notifyAbsences) ||
+        (activity.type === "sanction" && settings.notifySanctions);
+
+      if (shouldNotify) {
+        await scheduleNotification(activity.title, activity.description, {
+          route: activity.route,
+        });
+      }
+    }
+  }
+
+  await setCachedData(endpoint, newData);
+  lastFetchTime[endpoint] = Date.now();
+  return dataChanged;
 };
 
+/**
+ * 🔥 NEW: Poll all endpoints with proper UNAUTHORIZED propagation
+ * Throws UNAUTHORIZED if any endpoint fails auth
+ */
 export const pollAllEndpoints = async (silent: boolean = false): Promise<void> => {
   const settings = await getPollingSettings();
 
-  const isAuth = await apiClient.checkAuthOrRelogin();
-  if (!isAuth) {
-    console.log("[Polling] Not authenticated and auto-login failed. Skipping poll.");
-    return;
-  }
+  // 🚫 REMOVED: No more auth check here
+  // The package will throw UNAUTHORIZED if session is invalid
+  // The caller (PollingContext) must catch and handle it
 
   const regularEndpoints = ["currentElems", "currentMods", "absences"] as const;
+  
+  // 🔥 NEW: Don't catch errors here - let them propagate
   const results = await Promise.all(
     regularEndpoints.map((endpoint) => pollEndpoint(endpoint, settings, silent))
   );
@@ -249,4 +254,3 @@ export const pollAllEndpoints = async (silent: boolean = false): Promise<void> =
   await pollEndpoint("allMods", settings, silent, false);
   await pollEndpoint("filieres", settings, silent, false);
 };
-

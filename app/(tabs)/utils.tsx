@@ -33,6 +33,7 @@ import {
 } from "lucide-react-native";
 import { useQuery } from "@tanstack/react-query";
 import { getCachedData, getCachedModules, setCachedModules } from "@/services/cache";
+import { withReactQueryAuthHandler } from "@/services/apiErrorHandler";
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -44,7 +45,7 @@ type Utility = "filieres" | "modules" | "status";
 
 export default function UtilsScreen() {
   const { theme } = useTheme();
-  const { profile } = useAuth();
+  const { profile, handleUnauthorized } = useAuth();
   const [activeUtil, setActiveUtil] = useState<Utility | null>(null);
 
   const [selNiveau, setSelNiveau] = useState("1A");
@@ -52,53 +53,58 @@ export default function UtilsScreen() {
   const [selSemestre, setSelSemestre] = useState("S1");
   const netInfo = useNetInfo();
 
+  // 🔥 NEW: Wrapped with auth error handler
   const filieresQuery = useQuery({
     queryKey: ["all_filieres"],
-    queryFn: () => getCachedData("filieres"),
+    queryFn: withReactQueryAuthHandler(
+      () => getCachedData("filieres"),
+      handleUnauthorized
+    ),
     staleTime: Infinity,
     refetchOnReconnect: false,
   });
 
+  // 🔥 NEW: Wrapped with auth error handler
   const modulesLookupQuery = useQuery({
     queryKey: ["lookup_modules", selNiveau, selFiliere, selSemestre],
-    queryFn: async () => {
-      const cacheKey = `${selNiveau}_${selFiliere}_${selSemestre}`;
-      console.log(`[Utils] Loading modules for ${cacheKey}`);
-      
-      try {
-        // Try to fetch fresh data first
-        console.log(`[Utils] Attempting fresh fetch for ${cacheKey}...`);
-        const freshData = await schoolAppClient.getModules(selNiveau, selFiliere, selSemestre);
-        const hasContent = freshData && ((Array.isArray(freshData) && freshData.length > 0) || (typeof freshData === 'object' && Object.keys(freshData).length > 0));
+    queryFn: withReactQueryAuthHandler(
+      async () => {
+        const cacheKey = `${selNiveau}_${selFiliere}_${selSemestre}`;
+        console.log(`[Utils] Loading modules for ${cacheKey}`);
         
-        if (hasContent) {
-          console.log(`[Utils] Got fresh data for ${cacheKey}`);
-          // Only cache if we have internet and data is not empty
-          if (!(netInfo.isInternetReachable === false)) {
-            await setCachedModules(selNiveau, selFiliere, selSemestre, freshData);
-            console.log(`[Utils] Cached fresh data for ${cacheKey}`);
-          } else {
-            console.log(`[Utils] Offline, not caching for ${cacheKey}`);
+        try {
+          console.log(`[Utils] Attempting fresh fetch for ${cacheKey}...`);
+          const freshData = await schoolAppClient.getModules(selNiveau, selFiliere, selSemestre);
+          const hasContent = freshData && ((Array.isArray(freshData) && freshData.length > 0) || (typeof freshData === 'object' && Object.keys(freshData).length > 0));
+          
+          if (hasContent) {
+            console.log(`[Utils] Got fresh data for ${cacheKey}`);
+            if (!(netInfo.isInternetReachable === false)) {
+              await setCachedModules(selNiveau, selFiliere, selSemestre, freshData);
+              console.log(`[Utils] Cached fresh data for ${cacheKey}`);
+            } else {
+              console.log(`[Utils] Offline, not caching for ${cacheKey}`);
+            }
+            return freshData;
           }
-          return freshData;
+        } catch (e) {
+          console.log(`[Utils] Fresh fetch failed for ${cacheKey}:`, e);
         }
-      } catch (e) {
-        console.log(`[Utils] Fresh fetch failed for ${cacheKey}:`, e);
-      }
-      
-      // Try cache as fallback
-      console.log(`[Utils] Trying cache for ${cacheKey}...`);
-      const cachedData = await getCachedModules(selNiveau, selFiliere, selSemestre);
-      const hasCachedContent = cachedData && ((Array.isArray(cachedData) && cachedData.length > 0) || (typeof cachedData === 'object' && Object.keys(cachedData).length > 0));
-      
-      if (hasCachedContent) {
-        console.log(`[Utils] Using cached data for ${cacheKey}`);
-        return cachedData;
-      }
-      
-      console.log(`[Utils] No valid data found for ${cacheKey}`);
-      throw new Error("No data available (offline)");
-    },
+        
+        console.log(`[Utils] Trying cache for ${cacheKey}...`);
+        const cachedData = await getCachedModules(selNiveau, selFiliere, selSemestre);
+        const hasCachedContent = cachedData && ((Array.isArray(cachedData) && cachedData.length > 0) || (typeof cachedData === 'object' && Object.keys(cachedData).length > 0));
+        
+        if (hasCachedContent) {
+          console.log(`[Utils] Using cached data for ${cacheKey}`);
+          return cachedData;
+        }
+        
+        console.log(`[Utils] No valid data found for ${cacheKey}`);
+        throw new Error("No data available (offline)");
+      },
+      handleUnauthorized
+    ),
     enabled: activeUtil === "modules" && !!selFiliere,
     staleTime: Infinity,
     gcTime: Infinity,
@@ -107,24 +113,28 @@ export default function UtilsScreen() {
     refetchOnReconnect: true,
   });
 
+  // 🔥 NEW: Wrapped with auth error handler
   const platformStatusQuery = useQuery({
     queryKey: ["platform_status"],
-    queryFn: async () => {
-      const start = Date.now();
-      try {
-        const res = await fetch("https://schoolapp.ensam-umi.ac.ma/", {
-          method: 'HEAD',
-          cache: 'no-store',
-        });
-        return {
-          online: res.ok || res.status < 500,
-          latency: Date.now() - start,
-          time: new Date().toLocaleTimeString()
-        };
-      } catch (e) {
-        return { online: false, latency: 0, time: new Date().toLocaleTimeString() };
-      }
-    },
+    queryFn: withReactQueryAuthHandler(
+      async () => {
+        const start = Date.now();
+        try {
+          const res = await fetch("https://schoolapp.ensam-umi.ac.ma/", {
+            method: 'HEAD',
+            cache: 'no-store',
+          });
+          return {
+            online: res.ok || res.status < 500,
+            latency: Date.now() - start,
+            time: new Date().toLocaleTimeString()
+          };
+        } catch (e) {
+          return { online: false, latency: 0, time: new Date().toLocaleTimeString() };
+        }
+      },
+      handleUnauthorized
+    ),
     enabled: activeUtil === "status",
     refetchInterval: 15000,
     refetchOnReconnect: true,

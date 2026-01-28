@@ -30,6 +30,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { usePolling } from "@/contexts/PollingContext";
 import { useQuery } from "@tanstack/react-query";
 import { getCachedData, getCachedElementNames, setCachedElementNames } from "@/services/cache";
+import { withReactQueryAuthHandler } from "@/services/apiErrorHandler";
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -136,7 +137,7 @@ const MENU_ITEMS: MenuItem[] = [
 
 export default function NotesScreen() {
   const { theme } = useTheme();
-  const { profile } = useAuth();
+  const { profile, handleUnauthorized } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [statsModalVisible, setStatsModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
@@ -145,7 +146,6 @@ export default function NotesScreen() {
   const { lastPollTime, isPolling, poll } = usePolling();
   const [hasPolledCategory, setHasPolledCategory] = useState<Set<Category>>(new Set());
 
-  // Trigger poll once per category if needed
   useEffect(() => {
     if (!selectedCategory || hasPolledCategory.has(selectedCategory)) {
       return;
@@ -163,9 +163,13 @@ export default function NotesScreen() {
     void checkAndPoll();
   }, [selectedCategory, poll, hasPolledCategory]);
 
+  // 🔥 NEW: Wrapped with auth error handler
   const dataQuery = useQuery({
     queryKey: ["notes_data", selectedCategory],
-    queryFn: () => (selectedCategory ? getCachedData(selectedCategory) : null),
+    queryFn: withReactQueryAuthHandler(
+      () => (selectedCategory ? getCachedData(selectedCategory) : null),
+      handleUnauthorized
+    ),
     enabled: !!selectedCategory,
     staleTime: Infinity,
     gcTime: Infinity,
@@ -207,7 +211,6 @@ export default function NotesScreen() {
     return typeof v === 'string' ? parseFloat(v.replace(',', '.')) : v;
   };
 
-  // Extract targets from data to use as stable cache key
   const getTargets = (): string[] => {
     const data = dataQuery.data as any[];
     if (!data || !Array.isArray(data) || !profile?.administrative_info) return [];
@@ -226,46 +229,46 @@ export default function NotesScreen() {
   };
 
   const targets = getTargets();
-  // Convert targets array to stable string for cache key
   const targetsKey = targets.join("|");
 
+  // 🔥 NEW: Wrapped with auth error handler
   const { data: moduleMappings } = useQuery({
     queryKey: ["global_name_mappings", targetsKey],
-    queryFn: async () => {
-      // First try to get from permanent cache
-      const cachedNames = await getCachedElementNames();
-      if (Object.keys(cachedNames).length > 0) {
-        console.log("[Notes] Using permanently cached element names");
-        return cachedNames;
-      }
+    queryFn: withReactQueryAuthHandler(
+      async () => {
+        const cachedNames = await getCachedElementNames();
+        if (Object.keys(cachedNames).length > 0) {
+          console.log("[Notes] Using permanently cached element names");
+          return cachedNames;
+        }
 
-      // If not in permanent cache, fetch from API
-      if (targets.length === 0) return {};
-      const mapping: Record<string, string> = {};
-      await Promise.all(targets.map(async (target) => {
-        const [N, F, S] = target.split("|");
-        try {
-          const modulesObj = await schoolAppClient.getModules(N, F, S);
-          if (modulesObj && typeof modulesObj === 'object') {
-            Object.entries(modulesObj).forEach(([modCode, modData]: [string, any]) => {
-              mapping[modCode] = modData.intitule;
-              if (Array.isArray(modData.elements)) {
-                modData.elements.forEach((elem: any) => {
-                  if (elem.code) mapping[elem.code] = elem.intitule;
-                });
-              }
-            });
-          }
-        } catch (e) { }
-      }));
+        if (targets.length === 0) return {};
+        const mapping: Record<string, string> = {};
+        await Promise.all(targets.map(async (target) => {
+          const [N, F, S] = target.split("|");
+          try {
+            const modulesObj = await schoolAppClient.getModules(N, F, S);
+            if (modulesObj && typeof modulesObj === 'object') {
+              Object.entries(modulesObj).forEach(([modCode, modData]: [string, any]) => {
+                mapping[modCode] = modData.intitule;
+                if (Array.isArray(modData.elements)) {
+                  modData.elements.forEach((elem: any) => {
+                    if (elem.code) mapping[elem.code] = elem.intitule;
+                  });
+                }
+              });
+            }
+          } catch (e) { }
+        }));
 
-      // Cache permanently
-      if (Object.keys(mapping).length > 0) {
-        await setCachedElementNames(mapping);
-      }
+        if (Object.keys(mapping).length > 0) {
+          await setCachedElementNames(mapping);
+        }
 
-      return mapping;
-    },
+        return mapping;
+      },
+      handleUnauthorized
+    ),
     enabled: targets.length > 0,
     staleTime: Infinity,
     gcTime: Infinity,
@@ -302,73 +305,75 @@ export default function NotesScreen() {
     statsValue: { fontSize: 14, fontWeight: "700", color: theme.accent, textAlign: "right" },
   });
 
+  // 🔥 NEW: Wrapped with auth error handler
   const { data: statsData, isLoading: statsLoading } = useQuery({
     queryKey: ["element_stats", selectedItem?.CodeElem || selectedItem?.CodeMod, statsType, itemType],
-    queryFn: async () => {
-      if (!selectedItem) return null;
-      
-      try {
-        const code = selectedItem.CodeElem || selectedItem.CodeMod;
-        console.log("🔍 Stats Query - code:", code, "type:", statsType, "itemType:", itemType);
+    queryFn: withReactQueryAuthHandler(
+      async () => {
+        if (!selectedItem) return null;
         
-        if (!code) return null;
-
-        let stats = null;
-
-        if (itemType === "element") {
-          // Get Element instances from getCurrentElemNote (has methods)
-          console.log("🔍 Fetching current element notes...");
-          const elems = await schoolAppClient.getCurrentElemNote();
-          console.log("🔍 Got", elems?.length || 0, "current element notes");
+        try {
+          const code = selectedItem.CodeElem || selectedItem.CodeMod;
+          console.log("🔍 Stats Query - code:", code, "type:", statsType, "itemType:", itemType);
           
-          const elem = Array.isArray(elems) ? elems.find((e: any) => e.CodeElem === code) : null;
-          console.log("🔍 Element found?", !!elem);
-          
-          if (elem) {
-            console.log("🔍 Element type:", elem.constructor.name);
-            console.log("🔍 Element methods:", {
-              ccStats: typeof elem.ccStats,
-              exStats: typeof elem.exStats,
-              tpStats: typeof elem.tpStats,
-              moyStats: typeof elem.moyStats
-            });
+          if (!code) return null;
 
-            if (statsType === "cc" && typeof elem.ccStats === "function") {
-              console.log("🔍 Calling ccStats()");
-              stats = await elem.ccStats();
-            } else if (statsType === "ex" && typeof elem.exStats === "function") {
-              console.log("🔍 Calling exStats()");
-              stats = await elem.exStats();
-            } else if (statsType === "tp" && typeof elem.tpStats === "function") {
-              console.log("🔍 Calling tpStats()");
-              stats = await elem.tpStats();
-            } else if (statsType === "moy" && typeof elem.moyStats === "function") {
-              console.log("🔍 Calling moyStats()");
-              stats = await elem.moyStats();
+          let stats = null;
+
+          if (itemType === "element") {
+            console.log("🔍 Fetching current element notes...");
+            const elems = await schoolAppClient.getCurrentElemNote();
+            console.log("🔍 Got", elems?.length || 0, "current element notes");
+            
+            const elem = Array.isArray(elems) ? elems.find((e: any) => e.CodeElem === code) : null;
+            console.log("🔍 Element found?", !!elem);
+            
+            if (elem) {
+              console.log("🔍 Element type:", elem.constructor.name);
+              console.log("🔍 Element methods:", {
+                ccStats: typeof elem.ccStats,
+                exStats: typeof elem.exStats,
+                tpStats: typeof elem.tpStats,
+                moyStats: typeof elem.moyStats
+              });
+
+              if (statsType === "cc" && typeof elem.ccStats === "function") {
+                console.log("🔍 Calling ccStats()");
+                stats = await elem.ccStats();
+              } else if (statsType === "ex" && typeof elem.exStats === "function") {
+                console.log("🔍 Calling exStats()");
+                stats = await elem.exStats();
+              } else if (statsType === "tp" && typeof elem.tpStats === "function") {
+                console.log("🔍 Calling tpStats()");
+                stats = await elem.tpStats();
+              } else if (statsType === "moy" && typeof elem.moyStats === "function") {
+                console.log("🔍 Calling moyStats()");
+                stats = await elem.moyStats();
+              }
+            }
+          } else if (itemType === "module") {
+            console.log("🔍 Fetching current module notes...");
+            const mods = await schoolAppClient.getCurrentModNote();
+            console.log("🔍 Got", mods?.length || 0, "current module notes");
+            
+            const mod = Array.isArray(mods) ? mods.find((m: any) => m.CodeMod === code) : null;
+            console.log("🔍 Module found?", !!mod, "has stats?", mod?.stats ? "yes" : "no");
+            
+            if (mod && typeof mod.stats === "function") {
+              console.log("🔍 Calling module stats()");
+              stats = await mod.stats();
             }
           }
-        } else if (itemType === "module") {
-          // Get Module instances from getCurrentModNote
-          console.log("🔍 Fetching current module notes...");
-          const mods = await schoolAppClient.getCurrentModNote();
-          console.log("🔍 Got", mods?.length || 0, "current module notes");
-          
-          const mod = Array.isArray(mods) ? mods.find((m: any) => m.CodeMod === code) : null;
-          console.log("🔍 Module found?", !!mod, "has stats?", mod?.stats ? "yes" : "no");
-          
-          if (mod && typeof mod.stats === "function") {
-            console.log("🔍 Calling module stats()");
-            stats = await mod.stats();
-          }
-        }
 
-        console.log("🔍 Final stats:", stats);
-        return stats || null;
-      } catch (e) {
-        console.error("❌ Failed to fetch stats:", e);
-        return null;
-      }
-    },
+          console.log("🔍 Final stats:", stats);
+          return stats || null;
+        } catch (e) {
+          console.error("❌ Failed to fetch stats:", e);
+          return null;
+        }
+      },
+      handleUnauthorized
+    ),
     enabled: statsModalVisible && !!selectedItem,
     staleTime: Infinity,
     gcTime: Infinity,

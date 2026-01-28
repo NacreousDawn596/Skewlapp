@@ -12,7 +12,8 @@ import {
   ActivityIndicator,
   Dimensions,
   KeyboardAvoidingView,
-  Animated
+  Animated,
+  Alert
 } from "react-native";
 import { useTheme } from "@/themes/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,6 +23,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getCachedData, getCachedModules, setCachedModules } from "@/services/cache";
 import { usePolling } from "@/contexts/PollingContext";
 import { useNetInfo } from "@react-native-community/netinfo";
+import { withReactQueryAuthHandler, isUnauthorizedError } from "@/services/apiErrorHandler";
 import {
   ChevronDown,
   ChevronUp,
@@ -94,8 +96,7 @@ const ElementRow = ({ elem, theme, styles, updateMark, getStatusColor }: any) =>
 
 export default function CalculesScreen() {
   const { theme } = useTheme();
-  const { profile } = useAuth();
-  // const { lastPollTime, isPolling } = usePolling();
+  const { profile, handleUnauthorized } = useAuth();
   const { lastPollTime, isPolling, poll } = usePolling();
   const netInfo = useNetInfo();
 
@@ -105,9 +106,13 @@ export default function CalculesScreen() {
   const [userMarks, setUserMarks] = useState<Record<string, { CC?: string, TP?: string, EX?: string }>>({});
   const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
 
+  // 🔥 NEW: Use the auth error handler wrapper
   const filieresQuery = useQuery({
     queryKey: ["all_filieres"],
-    queryFn: () => getCachedData("filieres"),
+    queryFn: withReactQueryAuthHandler(
+      () => getCachedData("filieres"),
+      handleUnauthorized
+    ),
     staleTime: Infinity,
     gcTime: Infinity,
     refetchOnMount: false,
@@ -115,46 +120,51 @@ export default function CalculesScreen() {
     refetchOnReconnect: false,
   });
 
+  // 🔥 NEW: Use the auth error handler wrapper
   const modulesLookupQuery = useQuery({
     queryKey: ["lookup_modules_calc", selNiveau, selFiliere, selSemestre],
-    queryFn: async () => {
-      const cacheKey = `${selNiveau}_${selFiliere}_${selSemestre}`;
-      console.log(`[Calcules] Loading modules for ${cacheKey}`);
-      
-      try {
-        // Try to fetch fresh data first
-        console.log(`[Calcules] Attempting fresh fetch for ${cacheKey}...`);
-        const freshData = await schoolAppClient.getModules(selNiveau, selFiliere, selSemestre);
-        const hasContent = freshData && ((Array.isArray(freshData) && freshData.length > 0) || (typeof freshData === 'object' && Object.keys(freshData).length > 0));
+    queryFn: withReactQueryAuthHandler(
+      async () => {
+        const cacheKey = `${selNiveau}_${selFiliere}_${selSemestre}`;
+        console.log(`[Calcules] Loading modules for ${cacheKey}`);
         
-        if (hasContent) {
-          console.log(`[Calcules] Got fresh data for ${cacheKey}`);
-          // Only cache if we have internet and data is not empty
-          if (!(netInfo.isInternetReachable === false)) {
-            await setCachedModules(selNiveau, selFiliere, selSemestre, freshData);
-            console.log(`[Calcules] Cached fresh data for ${cacheKey}`);
-          } else {
-            console.log(`[Calcules] Offline, not caching for ${cacheKey}`);
+        try {
+          console.log(`[Calcules] Attempting fresh fetch for ${cacheKey}...`);
+          const freshData = await schoolAppClient.getModules(selNiveau, selFiliere, selSemestre);
+          const hasContent = freshData && ((Array.isArray(freshData) && freshData.length > 0) || (typeof freshData === 'object' && Object.keys(freshData).length > 0));
+          
+          if (hasContent) {
+            console.log(`[Calcules] Got fresh data for ${cacheKey}`);
+            if (!(netInfo.isInternetReachable === false)) {
+              await setCachedModules(selNiveau, selFiliere, selSemestre, freshData);
+              console.log(`[Calcules] Cached fresh data for ${cacheKey}`);
+            } else {
+              console.log(`[Calcules] Offline, not caching for ${cacheKey}`);
+            }
+            return freshData;
           }
-          return freshData;
+        } catch (e: any) {
+          // 🔥 NEW: Let UNAUTHORIZED propagate - wrapper will handle it
+          if (isUnauthorizedError(e)) {
+            throw e;
+          }
+          console.log(`[Calcules] Fresh fetch failed for ${cacheKey}:`, e);
         }
-      } catch (e) {
-        console.log(`[Calcules] Fresh fetch failed for ${cacheKey}:`, e);
-      }
-      
-      // Try cache as fallback
-      console.log(`[Calcules] Trying cache for ${cacheKey}...`);
-      const cachedData = await getCachedModules(selNiveau, selFiliere, selSemestre);
-      const hasCachedContent = cachedData && ((Array.isArray(cachedData) && cachedData.length > 0) || (typeof cachedData === 'object' && Object.keys(cachedData).length > 0));
-      
-      if (hasCachedContent) {
-        console.log(`[Calcules] Using cached data for ${cacheKey}`);
-        return cachedData;
-      }
-      
-      console.log(`[Calcules] No valid data found for ${cacheKey}`);
-      throw new Error("No data available (offline)");
-    },
+        
+        console.log(`[Calcules] Trying cache for ${cacheKey}...`);
+        const cachedData = await getCachedModules(selNiveau, selFiliere, selSemestre);
+        const hasCachedContent = cachedData && ((Array.isArray(cachedData) && cachedData.length > 0) || (typeof cachedData === 'object' && Object.keys(cachedData).length > 0));
+        
+        if (hasCachedContent) {
+          console.log(`[Calcules] Using cached data for ${cacheKey}`);
+          return cachedData;
+        }
+        
+        console.log(`[Calcules] No valid data found for ${cacheKey}`);
+        throw new Error("No data available (offline)");
+      },
+      handleUnauthorized
+    ),
     enabled: !!selFiliere,
     staleTime: Infinity,
     gcTime: Infinity,
@@ -165,17 +175,20 @@ export default function CalculesScreen() {
 
   const currentElemsQuery = useQuery({
     queryKey: ["current_elems_calc"],
-    queryFn: async () => {
-      const cached = await getCachedData("currentElems");
-      if (cached) {
-        console.log("[Calcules] Using cached currentElems");
-        return cached;
-      }
-      console.log("[Calcules] No cache for currentElems, triggering poll...");
-      await poll(false);
-      const refreshed = await getCachedData("currentElems");
-      return refreshed || null;
-    },
+    queryFn: withReactQueryAuthHandler(
+      async () => {
+        const cached = await getCachedData("currentElems");
+        if (cached) {
+          console.log("[Calcules] Using cached currentElems");
+          return cached;
+        }
+        console.log("[Calcules] No cache for currentElems, triggering poll...");
+        await poll(false);
+        const refreshed = await getCachedData("currentElems");
+        return refreshed || null;
+      },
+      handleUnauthorized
+    ),
     staleTime: Infinity,
     gcTime: Infinity,
     refetchOnMount: false,
@@ -185,17 +198,20 @@ export default function CalculesScreen() {
 
   const historyElemsQuery = useQuery({
     queryKey: ["history_elems_calc"],
-    queryFn: async () => {
-      const cached = await getCachedData("allElems");
-      if (cached) {
-        console.log("[Calcules] Using cached allElems");
-        return cached;
-      }
-      console.log("[Calcules] No cache for allElems, triggering poll...");
-      await poll(false);
-      const refreshed = await getCachedData("allElems");
-      return refreshed || null;
-    },
+    queryFn: withReactQueryAuthHandler(
+      async () => {
+        const cached = await getCachedData("allElems");
+        if (cached) {
+          console.log("[Calcules] Using cached allElems");
+          return cached;
+        }
+        console.log("[Calcules] No cache for allElems, triggering poll...");
+        await poll(false);
+        const refreshed = await getCachedData("allElems");
+        return refreshed || null;
+      },
+      handleUnauthorized
+    ),
     staleTime: Infinity,
     gcTime: Infinity,
     refetchOnMount: false,
@@ -267,7 +283,6 @@ export default function CalculesScreen() {
         let nTP = parseFloat(String(tp).replace(',', '.')) || 0;
         let nEX = parseFloat(String(ex).replace(',', '.')) || 0;
 
-        // Apply RATT logic if available and valid
         const nRATT = parseFloat(String(res?.RATT).replace(',', '.'));
         if (!isNaN(nRATT) && nRATT > 0) {
           if (nCC > 0) nCC = Math.max(nCC, nRATT);

@@ -29,6 +29,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { usePolling } from "@/contexts/PollingContext";
 import { useQuery } from "@tanstack/react-query";
 import { getCachedData, getCachedElementNames, setCachedElementNames } from "@/services/cache";
+import { withReactQueryAuthHandler } from "@/services/apiErrorHandler";
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -85,13 +86,17 @@ const SanctionItem = ({ item, theme, styles }: any) => (
 
 export default function AbsencesScreen() {
   const { theme } = useTheme();
-  const { profile } = useAuth();
+  const { profile, handleUnauthorized } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("absences");
   const { lastPollTime, isPolling, poll } = usePolling();
 
+  // 🔥 NEW: Wrapped with auth error handler
   const absencesQuery = useQuery({
     queryKey: ["absences_data"],
-    queryFn: () => getCachedData("absences"),
+    queryFn: withReactQueryAuthHandler(
+      () => getCachedData("absences"),
+      handleUnauthorized
+    ),
     staleTime: Infinity,
     gcTime: Infinity,
     refetchOnMount: false,
@@ -99,9 +104,13 @@ export default function AbsencesScreen() {
     refetchOnReconnect: true,
   });
 
+  // 🔥 NEW: Wrapped with auth error handler
   const sanctionsQuery = useQuery({
     queryKey: ["sanctions_data"],
-    queryFn: () => getCachedData("sanctions"),
+    queryFn: withReactQueryAuthHandler(
+      () => getCachedData("sanctions"),
+      handleUnauthorized
+    ),
     staleTime: Infinity,
     gcTime: Infinity,
     refetchOnMount: false,
@@ -125,55 +134,57 @@ export default function AbsencesScreen() {
     return `S${digit}`;
   };
 
+  // 🔥 NEW: Wrapped with auth error handler
   const { data: moduleMappings } = useQuery({
     queryKey: ["absence_name_mappings", profile?.administrative_info],
-    queryFn: async () => {
-      // First try permanent cache
-      const cachedNames = await getCachedElementNames();
-      if (Object.keys(cachedNames).length > 0) {
-        console.log("[Absences] Using permanently cached element names");
-        return cachedNames;
-      }
-
-      const absences = (absencesQuery.data as any)?.details || [];
-      const sanctions = Array.isArray(sanctionsQuery.data) ? sanctionsQuery.data : ((sanctionsQuery.data as any)?.details || []);
-      if (!profile?.administrative_info) return {};
-      const targets = new Set<string>();
-      [...absences, ...sanctions].forEach(item => {
-        const code = item.Element || item.Module || item.Type;
-        if (code && code.length >= 4) {
-          const S = getSemesterFromCode(code);
-          const N = getNiveauFromSemestre(S);
-          const admin = profile.administrative_info;
-          const F = admin.Filière || admin.Filiere;
-          if (N && F && S) targets.add(`${N}|${F}|${S}`);
+    queryFn: withReactQueryAuthHandler(
+      async () => {
+        const cachedNames = await getCachedElementNames();
+        if (Object.keys(cachedNames).length > 0) {
+          console.log("[Absences] Using permanently cached element names");
+          return cachedNames;
         }
-      });
-      const mapping: Record<string, string> = {};
-      await Promise.all([...targets].map(async (target) => {
-        const [N, F, S] = target.split("|");
-        try {
-          const modulesObj = await schoolAppClient.getModules(N, F, S);
-          if (modulesObj && typeof modulesObj === 'object') {
-            Object.entries(modulesObj).forEach(([modCode, modData]: [string, any]) => {
-              mapping[modCode] = modData.intitule;
-              if (Array.isArray(modData.elements)) {
-                modData.elements.forEach((elem: any) => {
-                  if (elem.code) mapping[elem.code] = elem.intitule;
-                });
-              }
-            });
-          }
-        } catch (e) { }
-      }));
-      
-      // Cache permanently
-      if (Object.keys(mapping).length > 0) {
-        await setCachedElementNames(mapping);
-      }
 
-      return mapping;
-    },
+        const absences = (absencesQuery.data as any)?.details || [];
+        const sanctions = Array.isArray(sanctionsQuery.data) ? sanctionsQuery.data : ((sanctionsQuery.data as any)?.details || []);
+        if (!profile?.administrative_info) return {};
+        const targets = new Set<string>();
+        [...absences, ...sanctions].forEach(item => {
+          const code = item.Element || item.Module || item.Type;
+          if (code && code.length >= 4) {
+            const S = getSemesterFromCode(code);
+            const N = getNiveauFromSemestre(S);
+            const admin = profile.administrative_info;
+            const F = admin.Filière || admin.Filiere;
+            if (N && F && S) targets.add(`${N}|${F}|${S}`);
+          }
+        });
+        const mapping: Record<string, string> = {};
+        await Promise.all([...targets].map(async (target) => {
+          const [N, F, S] = target.split("|");
+          try {
+            const modulesObj = await schoolAppClient.getModules(N, F, S);
+            if (modulesObj && typeof modulesObj === 'object') {
+              Object.entries(modulesObj).forEach(([modCode, modData]: [string, any]) => {
+                mapping[modCode] = modData.intitule;
+                if (Array.isArray(modData.elements)) {
+                  modData.elements.forEach((elem: any) => {
+                    if (elem.code) mapping[elem.code] = elem.intitule;
+                  });
+                }
+              });
+            }
+          } catch (e) { }
+        }));
+        
+        if (Object.keys(mapping).length > 0) {
+          await setCachedElementNames(mapping);
+        }
+
+        return mapping;
+      },
+      handleUnauthorized
+    ),
     enabled: (!!absencesQuery.data || !!sanctionsQuery.data) && !!profile?.administrative_info,
     staleTime: Infinity,
     gcTime: Infinity,

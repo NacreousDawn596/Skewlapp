@@ -13,6 +13,7 @@ interface AuthContextValue {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  handleUnauthorized: () => Promise<void>;
   loginError: string | null;
   isLoggingIn: boolean;
   hasAttemptedAutoLogin: boolean;
@@ -67,7 +68,9 @@ export const [AuthProvider, useAuth] =
                   };
                 }
               }
-            } catch (e) {
+            } catch (e: any) {
+              // ⚠️ NEW: Don't auto-logout on startup errors
+              // Let the user stay "logged in" with cached data
               console.error("[AuthContext] Auto-login failed:", e);
             }
           }
@@ -164,6 +167,16 @@ export const [AuthProvider, useAuth] =
       },
     });
 
+    /**
+     * 🔥 NEW: Centralized UNAUTHORIZED handler
+     * This is called from ANYWHERE in the app when UNAUTHORIZED is caught
+     * ONE PLACE ONLY - no scattered logout logic
+     */
+    const handleUnauthorized = async () => {
+      console.warn("[AuthContext] Session expired - logging out");
+      await logoutMutation.mutateAsync();
+    };
+
     return {
       isAuthenticated,
       profile,
@@ -171,6 +184,7 @@ export const [AuthProvider, useAuth] =
       login: async (email, password) =>
         loginMutation.mutateAsync({ email, password }),
       logout: async () => logoutMutation.mutateAsync(),
+      handleUnauthorized,
       loginError,
       isLoggingIn: loginMutation.isPending,
       hasAttemptedAutoLogin:
