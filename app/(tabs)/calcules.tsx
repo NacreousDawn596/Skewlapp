@@ -95,7 +95,8 @@ const ElementRow = ({ elem, theme, styles, updateMark, getStatusColor }: any) =>
 export default function CalculesScreen() {
   const { theme } = useTheme();
   const { profile } = useAuth();
-  const { lastPollTime, isPolling } = usePolling();
+  // const { lastPollTime, isPolling } = usePolling();
+  const { lastPollTime, isPolling, poll } = usePolling();
   const netInfo = useNetInfo();
 
   const [selNiveau, setSelNiveau] = useState("1A");
@@ -152,7 +153,7 @@ export default function CalculesScreen() {
       }
       
       console.log(`[Calcules] No valid data found for ${cacheKey}`);
-      return null;
+      throw new Error("No data available (offline)");
     },
     enabled: !!selFiliere,
     staleTime: Infinity,

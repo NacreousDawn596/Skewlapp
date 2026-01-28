@@ -1,19 +1,18 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+import { ThemeProvider, useTheme } from "@/themes/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { PollingProvider } from "@/contexts/PollingContext";
-import { ThemeProvider, useTheme } from "@/themes/ThemeContext";
 import { requestNotificationPermissions } from "@/services/notifications";
-import { SafeAreaProvider } from "react-native-safe-area-context";
 
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
-
-import { SafeAreaView } from "react-native-safe-area-context";
 
 function RootLayoutNav() {
   const { theme } = useTheme();

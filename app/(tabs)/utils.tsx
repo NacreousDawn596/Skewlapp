@@ -97,7 +97,7 @@ export default function UtilsScreen() {
       }
       
       console.log(`[Utils] No valid data found for ${cacheKey}`);
-      return null;
+      throw new Error("No data available (offline)");
     },
     enabled: activeUtil === "modules" && !!selFiliere,
     staleTime: Infinity,

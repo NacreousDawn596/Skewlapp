@@ -7,19 +7,54 @@ import { useNetInfo } from "@react-native-community/netinfo";
 import { getPollingSettings, pollAllEndpoints, resetFetchTimes } from "../services/polling";
 import { useAuth } from "./AuthContext";
 import { apiClient } from "@/api/client";
+import { runSinglePoll } from "@/services/pollExecutor";
+
+import * as Network from "expo-network";
 
 const BACKGROUND_POLL_TASK = "background-poll-task";
 
 TaskManager.defineTask(BACKGROUND_POLL_TASK, async () => {
   try {
     console.log("[BackgroundFetch] Task triggered");
-    await pollAllEndpoints(true); // silent: true to avoid duplicate notifications
-    return BackgroundFetch.BackgroundFetchResult.NewData;
-  } catch (error) {
-    console.error("[BackgroundFetch] Task failed:", error);
+
+    const netState = await Network.getNetworkStateAsync();
+    if (!netState.isConnected || !netState.isInternetReachable) {
+      console.log("[BackgroundFetch] No internet, skipping poll");
+      return BackgroundFetch.BackgroundFetchResult.NoData;
+    }
+
+    try {
+      await runSinglePoll(() => pollAllEndpoints(true));
+      console.log("[BackgroundFetch] Poll success");
+      return BackgroundFetch.BackgroundFetchResult.NewData;
+    } catch (pollError) {
+      console.warn("[BackgroundFetch] Poll failed, trying auto-login...");
+    }
+
+    const authResult = await apiClient.checkAuthOrRelogin();
+    if (!authResult.isAuthenticated) {
+      console.error("[BackgroundFetch] Auto-login failed");
+      return BackgroundFetch.BackgroundFetchResult.Failed;
+    }
+
+    console.log("[BackgroundFetch] Auto-login success, retrying poll");
+
+    try {
+      await runSinglePoll(() => pollAllEndpoints(true));
+      console.log("[BackgroundFetch] Poll success after re-login");
+      return BackgroundFetch.BackgroundFetchResult.NewData;
+    } catch (retryError) {
+      console.error("[BackgroundFetch] Poll failed after re-login", retryError);
+      return BackgroundFetch.BackgroundFetchResult.Failed;
+    }
+
+  } catch (fatalError) {
+    console.error("[BackgroundFetch] Fatal error:", fatalError);
     return BackgroundFetch.BackgroundFetchResult.Failed;
   }
 });
+
+
 
 interface PollingContextValue {
   isPolling: boolean;
@@ -44,16 +79,15 @@ export const [PollingProvider, usePolling] =
     // Add flag to track if polling already started
     const isPollingStartedRef = useRef(false);
 
-    const poll = async (silent: boolean = false) => {
-      console.log(`[PollingContext] Starting poll (Silent: ${silent})...`);
-      try {
+    const poll = async (silent = false) => {
+      await runSinglePoll(async () => {
+        setIsPolling(true);
         await pollAllEndpoints(silent);
-        console.log(`[PollingContext] Poll complete.`);
         setLastPollTime(Date.now());
-      } catch (e) {
-        console.error(`[PollingContext] Poll failed:`, e);
-      }
+        setIsPolling(false);
+      });
     };
+
 
     const registerBackgroundTask = async () => {
       try {

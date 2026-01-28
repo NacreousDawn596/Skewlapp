@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Redirect } from "expo-router";
 import {
   View,
   Text,
@@ -16,10 +17,14 @@ import { Lock, Mail } from "lucide-react-native";
 
 export default function LoginScreen() {
   const { theme } = useTheme();
-  const { login, loginError, isLoggingIn } = useAuth();
+  const { login, loginError, isLoggingIn, isAuthenticated } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [scaleAnim] = useState(new Animated.Value(1));
+
+  if (isAuthenticated) {
+    return <Redirect href="/(tabs)/home" />;
+  }
 
   const handleLogin = async () => {
     if (!email || !password) {

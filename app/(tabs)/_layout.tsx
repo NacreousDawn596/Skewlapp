@@ -1,4 +1,3 @@
-import { Tabs } from "expo-router";
 import {
   Home,
   GraduationCap,
@@ -10,8 +9,19 @@ import {
 import React from "react";
 import { useTheme } from "@/themes/ThemeContext";
 
+import { Tabs, Redirect } from "expo-router";
+import { useAuth } from "@/contexts/AuthContext";
+
 export default function TabLayout() {
   const { theme } = useTheme();
+
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) return null; // splash / loader
+
+  if (!isAuthenticated) {
+    return <Redirect href="/login" />;
+  }
 
   return (
     <Tabs
