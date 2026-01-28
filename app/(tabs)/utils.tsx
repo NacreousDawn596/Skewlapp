@@ -74,7 +74,7 @@ export default function UtilsScreen() {
         if (hasContent) {
           console.log(`[Utils] Got fresh data for ${cacheKey}`);
           // Only cache if we have internet and data is not empty
-          if (netInfo.isConnected) {
+          if (!(netInfo.isInternetReachable === false)) {
             await setCachedModules(selNiveau, selFiliere, selSemestre, freshData);
             console.log(`[Utils] Cached fresh data for ${cacheKey}`);
           } else {

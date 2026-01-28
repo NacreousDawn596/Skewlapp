@@ -4,57 +4,66 @@ import createContextHook from "@nkzw/create-context-hook";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import { useNetInfo } from "@react-native-community/netinfo";
-import { getPollingSettings, pollAllEndpoints, resetFetchTimes } from "../services/polling";
+import * as Network from "expo-network";
+
+import {
+  getPollingSettings,
+  pollAllEndpoints,
+  resetFetchTimes,
+} from "../services/polling";
 import { useAuth } from "./AuthContext";
 import { apiClient } from "@/api/client";
 import { runSinglePoll } from "@/services/pollExecutor";
 
-import * as Network from "expo-network";
-
 const BACKGROUND_POLL_TASK = "background-poll-task";
 
-TaskManager.defineTask(BACKGROUND_POLL_TASK, async () => {
-  try {
-    console.log("[BackgroundFetch] Task triggered");
+/* -------------------------------------------------------------------------- */
+/*                            BACKGROUND FETCH LOCK                            */
+/* -------------------------------------------------------------------------- */
 
+let backgroundPollRunning = false;
+
+/* -------------------------------------------------------------------------- */
+/*                            BACKGROUND FETCH TASK                            */
+/* -------------------------------------------------------------------------- */
+
+TaskManager.defineTask(BACKGROUND_POLL_TASK, async () => {
+  if (backgroundPollRunning) {
+    return BackgroundFetch.BackgroundFetchResult.NoData;
+  }
+
+  backgroundPollRunning = true;
+
+  try {
     const netState = await Network.getNetworkStateAsync();
-    if (!netState.isConnected || !netState.isInternetReachable) {
-      console.log("[BackgroundFetch] No internet, skipping poll");
+
+    if (netState.isInternetReachable !== true) {
       return BackgroundFetch.BackgroundFetchResult.NoData;
     }
 
     try {
       await runSinglePoll(() => pollAllEndpoints(true));
-      console.log("[BackgroundFetch] Poll success");
       return BackgroundFetch.BackgroundFetchResult.NewData;
-    } catch (pollError) {
-      console.warn("[BackgroundFetch] Poll failed, trying auto-login...");
-    }
+    } catch {
+      const auth = await apiClient.checkAuthOrRelogin();
+      if (!auth.isAuthenticated) {
+        return BackgroundFetch.BackgroundFetchResult.Failed;
+      }
 
-    const authResult = await apiClient.checkAuthOrRelogin();
-    if (!authResult.isAuthenticated) {
-      console.error("[BackgroundFetch] Auto-login failed");
-      return BackgroundFetch.BackgroundFetchResult.Failed;
-    }
-
-    console.log("[BackgroundFetch] Auto-login success, retrying poll");
-
-    try {
       await runSinglePoll(() => pollAllEndpoints(true));
-      console.log("[BackgroundFetch] Poll success after re-login");
       return BackgroundFetch.BackgroundFetchResult.NewData;
-    } catch (retryError) {
-      console.error("[BackgroundFetch] Poll failed after re-login", retryError);
-      return BackgroundFetch.BackgroundFetchResult.Failed;
     }
-
-  } catch (fatalError) {
-    console.error("[BackgroundFetch] Fatal error:", fatalError);
+  } catch (e) {
+    console.error("[BackgroundFetch] Fatal:", e);
     return BackgroundFetch.BackgroundFetchResult.Failed;
+  } finally {
+    backgroundPollRunning = false;
   }
 });
 
-
+/* -------------------------------------------------------------------------- */
+/*                              CONTEXT TYPES                                  */
+/* -------------------------------------------------------------------------- */
 
 interface PollingContextValue {
   isPolling: boolean;
@@ -64,88 +73,127 @@ interface PollingContextValue {
   poll: (silent?: boolean) => Promise<void>;
 }
 
+/* -------------------------------------------------------------------------- */
+/*                               CONTEXT HOOK                                  */
+/* -------------------------------------------------------------------------- */
+
 export const [PollingProvider, usePolling] =
   createContextHook<PollingContextValue>(() => {
     const { isAuthenticated } = useAuth();
     const netInfo = useNetInfo();
+
     const [isPolling, setIsPolling] = useState(false);
     const [lastPollTime, setLastPollTime] = useState<number | null>(null);
-    const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const intervalRef = useRef<NodeJS.Timeout | null>(null);
     const appState = useRef<AppStateStatus>(AppState.currentState);
+
+    const hasStartedRef = useRef(false);
     const wasOfflineRef = useRef(false);
 
-    const isFirstPoll = useRef(true);
+    /* ---------------------------------------------------------------------- */
+    /*                         NETWORK SOURCE OF TRUTH                         */
+    /* ---------------------------------------------------------------------- */
 
-    // Add flag to track if polling already started
-    const isPollingStartedRef = useRef(false);
+    const isNetworkReady =
+      netInfo.isConnected === true &&
+      netInfo.isInternetReachable === true;
 
-    const poll = async (silent = false) => {
-      await runSinglePoll(async () => {
-        setIsPolling(true);
-        await pollAllEndpoints(silent);
-        setLastPollTime(Date.now());
-        setIsPolling(false);
+    /* ---------------------------------------------------------------------- */
+    /*                                POLLING                                  */
+    /* ---------------------------------------------------------------------- */
+
+    const poll = useCallback(
+      async (silent = false) => {
+        if (!isNetworkReady || !isAuthenticated) return;
+
+        await runSinglePoll(async () => {
+          setIsPolling(true);
+          await pollAllEndpoints(silent);
+          setLastPollTime(Date.now());
+          setIsPolling(false);
+        });
+      },
+      [isNetworkReady, isAuthenticated]
+    );
+
+    /* ---------------------------------------------------------------------- */
+    /*                         BACKGROUND TASK SETUP                            */
+    /* ---------------------------------------------------------------------- */
+
+    const registerBackgroundTask = async () => {
+      const settings = await getPollingSettings();
+      const intervalSecs = Math.max(settings.interval * 60, 900);
+
+      await BackgroundFetch.registerTaskAsync(BACKGROUND_POLL_TASK, {
+        minimumInterval: intervalSecs,
+        stopOnTerminate: false,
+        startOnBoot: true,
       });
     };
 
-
-    const registerBackgroundTask = async () => {
-      try {
-        const settings = await getPollingSettings();
-        const intervalSecs = Math.max(settings.interval * 60, 900); // Minutes to seconds, min 15 mins
-
-        await BackgroundFetch.registerTaskAsync(BACKGROUND_POLL_TASK, {
-          minimumInterval: intervalSecs,
-          stopOnTerminate: false,
-          startOnBoot: true,
-        });
-        console.log("[BackgroundFetch] Task registered");
-      } catch (err) {
-        console.error("[BackgroundFetch] Registration failed:", err);
-      }
-    };
-
     const unregisterBackgroundTask = async () => {
-      try {
-        await BackgroundFetch.unregisterTaskAsync(BACKGROUND_POLL_TASK);
-        console.log("[BackgroundFetch] Task unregistered");
-      } catch (err) { }
+      await BackgroundFetch.unregisterTaskAsync(BACKGROUND_POLL_TASK);
     };
+
+    /* ---------------------------------------------------------------------- */
+    /*                           START / STOP POLLING                           */
+    /* ---------------------------------------------------------------------- */
 
     const startPolling = useCallback(async () => {
-      if (isPollingStartedRef.current) return; // Prevent duplicate startup
-      isPollingStartedRef.current = true;
+      if (hasStartedRef.current) return;
+      if (!isAuthenticated || !isNetworkReady) return;
 
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
+      hasStartedRef.current = true;
 
-      const wasFirst = isFirstPoll.current;
-      if (wasFirst) {
-        setIsPolling(true);
-        isFirstPoll.current = false;
-      }
-      try {
-        await poll(!wasFirst); // FIX: invert silent value - first poll NOT silent
-      } finally {
-        setIsPolling(false);
-      }
+      await poll(false);
 
       const settings = await getPollingSettings();
-      const intervalMs = Math.max(settings.interval, 45) * 60 * 1000; // Minutes to ms
+      const intervalMs = Math.max(settings.interval, 45) * 60 * 1000;
 
-      intervalRef.current = setInterval(() => poll(true), intervalMs); // Subsequent polls silent
-    }, []);
+      intervalRef.current = setInterval(() => {
+        poll(true);
+      }, intervalMs);
 
-    const stopPolling = useCallback(() => {
-      isPollingStartedRef.current = false; // Reset flag
+      await registerBackgroundTask();
+    }, [poll, isAuthenticated, isNetworkReady]);
+
+    const stopPolling = useCallback(async () => {
+      hasStartedRef.current = false;
+
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+
       setIsPolling(false);
-      void unregisterBackgroundTask();
+      await unregisterBackgroundTask();
     }, []);
+
+    /* ---------------------------------------------------------------------- */
+    /*                         APP STATE (FOREGROUND)                           */
+    /* ---------------------------------------------------------------------- */
+
+    useEffect(() => {
+      const sub = AppState.addEventListener("change", next => {
+        if (
+          appState.current.match(/inactive|background/) &&
+          next === "active"
+        ) {
+          if (isAuthenticated && isNetworkReady) {
+            startPolling();
+          }
+        }
+
+        appState.current = next;
+      });
+
+      return () => sub.remove();
+    }, [isAuthenticated, isNetworkReady, startPolling]);
+
+    /* ---------------------------------------------------------------------- */
+    /*                      AUTH + NETWORK GATED START                          */
+    /* ---------------------------------------------------------------------- */
 
     useEffect(() => {
       if (!isAuthenticated) {
@@ -153,60 +201,40 @@ export const [PollingProvider, usePolling] =
         return;
       }
 
-      const subscription = AppState.addEventListener("change", (nextAppState) => {
-        if (
-          appState.current.match(/inactive|background/) &&
-          nextAppState === "active"
-        ) {
-          if (isAuthenticated) {
-            void startPolling();
-          }
-        }
+      if (!isNetworkReady) return;
 
-        appState.current = nextAppState;
-      });
+      startPolling();
+    }, [isAuthenticated, isNetworkReady, startPolling, stopPolling]);
 
-      void startPolling();
+    /* ---------------------------------------------------------------------- */
+    /*                         REAL RECONNECTION LOGIC                          */
+    /* ---------------------------------------------------------------------- */
 
-      return () => {
-        stopPolling();
-        subscription.remove();
-      };
-    }, [isAuthenticated, startPolling, stopPolling]);
-
-    // Handle network reconnection - reset fetch times and poll everything
     useEffect(() => {
-      if (!netInfo.isConnected) {
+      if (netInfo.isInternetReachable === null) return;
+
+      if (netInfo.isInternetReachable === false) {
         wasOfflineRef.current = true;
         return;
       }
 
-      // Just came back online
-      if (wasOfflineRef.current && netInfo.isConnected) {
-        console.log("[PollingContext] Network reconnected - resetting fetch times and polling...");
+      if (wasOfflineRef.current && netInfo.isInternetReachable === true) {
         wasOfflineRef.current = false;
 
-        const handleReconnection = async () => {
-          try {
-            // Reset fetch times to force refetch of all cached endpoints
-            resetFetchTimes();
+        const handleReconnect = async () => {
+          resetFetchTimes();
 
-            // Check auth status and auto-login if needed
-            const authStatus = await apiClient.checkAuthOrRelogin();
-            console.log("[PollingContext] Auth status after reconnection:", authStatus.isAuthenticated);
-
-            // If authenticated, poll all endpoints
-            if (authStatus.isAuthenticated) {
-              await poll(false);
-            }
-          } catch (e) {
-            console.error("[PollingContext] Reconnection handler error:", e);
+          const auth = await apiClient.checkAuthOrRelogin();
+          if (auth.isAuthenticated) {
+            await poll(false);
           }
         };
 
-        void handleReconnection();
+        void handleReconnect();
       }
-    }, [netInfo.isConnected, poll]);
+    }, [netInfo.isInternetReachable, poll]);
+
+    /* ---------------------------------------------------------------------- */
 
     return {
       isPolling,

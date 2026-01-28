@@ -130,7 +130,7 @@ export default function CalculesScreen() {
         if (hasContent) {
           console.log(`[Calcules] Got fresh data for ${cacheKey}`);
           // Only cache if we have internet and data is not empty
-          if (netInfo.isConnected) {
+          if (!(netInfo.isInternetReachable === false)) {
             await setCachedModules(selNiveau, selFiliere, selSemestre, freshData);
             console.log(`[Calcules] Cached fresh data for ${cacheKey}`);
           } else {

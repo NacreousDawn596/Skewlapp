@@ -365,6 +365,8 @@ export default function HomeScreen() {
     return data.Sanction || "None";
   };
 
+  const isOffline = netInfo.isInternetReachable === false;
+
   return (
     <View style={styles.container}>
       <Stack.Screen
@@ -372,7 +374,7 @@ export default function HomeScreen() {
           headerShown: false,
         }}
       />
-      {!netInfo.isConnected && (
+      {isOffline && (
         <View style={styles.offlineBanner}>
           <WifiOff size={16} color="white" />
           <Text style={styles.offlineText}>Vous êtes hors ligne</Text>
