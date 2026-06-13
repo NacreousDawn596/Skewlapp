@@ -197,17 +197,24 @@ export const pollEndpoint = async (
   console.log(`[Polling] ${endpoint} update check. Silent: ${silent}`);
 
   const dataChanged = JSON.stringify(oldData) !== JSON.stringify(newData);
+  const hasBaselineCache = oldData !== null;
 
-  if (!silent && dataChanged && settings.notificationsEnabled) {
-    const changes = detectChanges(endpoint, oldData || (Array.isArray(newData) ? [] : {}), newData, settings);
+  if (dataChanged && hasBaselineCache) {
+    const changes = detectChanges(
+      endpoint,
+      oldData || (Array.isArray(newData) ? [] : {}),
+      newData,
+      settings
+    );
 
     for (const activity of changes) {
       await addActivity(activity);
 
       const shouldNotify =
-        (activity.type === "note" && settings.notifyNotes) ||
-        (activity.type === "absence" && settings.notifyAbsences) ||
-        (activity.type === "sanction" && settings.notifySanctions);
+        settings.notificationsEnabled &&
+        ((activity.type === "note" && settings.notifyNotes) ||
+          (activity.type === "absence" && settings.notifyAbsences) ||
+          (activity.type === "sanction" && settings.notifySanctions));
 
       if (shouldNotify) {
         await scheduleNotification(activity.title, activity.description, {

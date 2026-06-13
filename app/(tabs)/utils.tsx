@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,8 +9,10 @@ import {
   Platform,
   UIManager,
   Dimensions,
-  ActivityIndicator
+  ActivityIndicator,
+  BackHandler,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "@/themes/ThemeContext";
 import { Stack } from "expo-router";
 import { schoolAppClient } from "@/api/client";
@@ -195,6 +197,26 @@ export default function UtilsScreen() {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setActiveUtil(null);
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (activeUtil) {
+          handleBack();
+          return true;
+        }
+
+        return false;
+      };
+
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress
+      );
+
+      return () => subscription.remove();
+    }, [activeUtil])
+  );
 
   const renderModuleLibrary = () => {
     const niveaus = ["1A", "2A", "3A", "4A", "5A"];

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -12,7 +12,9 @@ import {
   ActivityIndicator,
   RefreshControl,
   Modal,
+  BackHandler,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "@/themes/ThemeContext";
 import { Stack } from "expo-router";
 import { schoolAppClient } from "@/api/client";
@@ -187,6 +189,31 @@ export default function NotesScreen() {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setSelectedCategory(null);
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (statsModalVisible) {
+          setStatsModalVisible(false);
+          return true;
+        }
+
+        if (selectedCategory) {
+          handleBack();
+          return true;
+        }
+
+        return false;
+      };
+
+      const subscription = BackHandler.addEventListener(
+        "hardwareBackPress",
+        onBackPress
+      );
+
+      return () => subscription.remove();
+    }, [selectedCategory, statsModalVisible])
+  );
 
   const getNiveauFromSemestre = (S: string): string => {
     const sNum = parseInt(S.replace("S", ""), 10);
