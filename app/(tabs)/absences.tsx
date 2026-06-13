@@ -90,7 +90,6 @@ export default function AbsencesScreen() {
   const [activeTab, setActiveTab] = useState<Tab>("absences");
   const { lastPollTime, isPolling, poll } = usePolling();
 
-  // 🔥 NEW: Wrapped with auth error handler
   const absencesQuery = useQuery({
     queryKey: ["absences_data"],
     queryFn: withReactQueryAuthHandler(
@@ -104,7 +103,6 @@ export default function AbsencesScreen() {
     refetchOnReconnect: true,
   });
 
-  // 🔥 NEW: Wrapped with auth error handler
   const sanctionsQuery = useQuery({
     queryKey: ["sanctions_data"],
     queryFn: withReactQueryAuthHandler(
@@ -134,16 +132,35 @@ export default function AbsencesScreen() {
     return `S${digit}`;
   };
 
-  // 🔥 NEW: Wrapped with auth error handler
+  const getDisplayName = (item: any, mappedName?: string) => {
+    const candidates = [
+      mappedName,
+      item?.Intitule,
+      item?.intitule,
+      item?.Intitulé,
+      item?.name,
+      item?.Name,
+      item?.Libelle,
+      item?.Libellé,
+      item?.Module,
+      item?.Element,
+      item?.Type,
+      item?.code,
+    ];
+
+    const found = candidates.find(
+      (value) => typeof value === "string" && value.trim().length > 0
+    );
+
+    return found || "Unknown";
+  };
+
   const { data: moduleMappings } = useQuery({
     queryKey: ["absence_name_mappings", profile?.administrative_info],
     queryFn: withReactQueryAuthHandler(
       async () => {
         const cachedNames = await getCachedElementNames();
-        if (Object.keys(cachedNames).length > 0) {
-          console.log("[Absences] Using permanently cached element names");
-          return cachedNames;
-        }
+        const mapping: Record<string, string> = { ...cachedNames };
 
         const absences = (absencesQuery.data as any)?.details || [];
         const sanctions = Array.isArray(sanctionsQuery.data) ? sanctionsQuery.data : ((sanctionsQuery.data as any)?.details || []);
@@ -159,17 +176,20 @@ export default function AbsencesScreen() {
             if (N && F && S) targets.add(`${N}|${F}|${S}`);
           }
         });
-        const mapping: Record<string, string> = {};
         await Promise.all([...targets].map(async (target) => {
           const [N, F, S] = target.split("|");
           try {
             const modulesObj = await schoolAppClient.getModules(N, F, S);
             if (modulesObj && typeof modulesObj === 'object') {
               Object.entries(modulesObj).forEach(([modCode, modData]: [string, any]) => {
-                mapping[modCode] = modData.intitule;
+                const moduleName = modData.intitule || modData.Intitule || modData.name || modData.Name;
+                if (moduleName) {
+                  mapping[modCode] = moduleName;
+                }
                 if (Array.isArray(modData.elements)) {
                   modData.elements.forEach((elem: any) => {
-                    if (elem.code) mapping[elem.code] = elem.intitule;
+                    const elementName = elem.intitule || elem.Intitule || elem.name || elem.Name;
+                    if (elem.code && elementName) mapping[elem.code] = elementName;
                   });
                 }
               });
@@ -301,13 +321,18 @@ export default function AbsencesScreen() {
                   <View key={`unauth-${idx}`} style={[styles.card, { backgroundColor: '#FF6B6B10' }]}>
                     <View style={styles.iconBox}><XCircle size={22} color="#FF6B6B" /></View>
                     <View style={styles.contentBox}>
-                      <Text style={[styles.itemTitle, { color: '#FF6B6B' }]}>Non autorisé : {moduleMappings?.[code] || code}</Text>
+                      <Text style={[styles.itemTitle, { color: '#FF6B6B' }]}>Non autorisé : {getDisplayName({ code }, moduleMappings?.[code])}</Text>
                       <Text style={styles.itemMeta}>• {code} •</Text>
                     </View>
                   </View>
                 ))}
                 {items.map((item: any, index: number) => (
-                  <SanctionItem key={index} item={item} theme={theme} styles={styles} />
+                  <SanctionItem
+                    key={index}
+                    item={item}
+                    theme={theme}
+                    styles={styles}
+                  />
                 ))}
               </View>
             );

@@ -71,10 +71,10 @@ export default function SettingsScreen() {
 
   const handleIntervalChange = () => {
     const interval = parseInt(intervalInput, 10);
-    if (interval >= 45 && interval <= 360) {
+    if (interval >= 1 && interval <= 360) {
       updateSettingsMutation.mutate({ interval });
     } else {
-      Alert.alert("Intervalle invalide", "Veuillez entrer une valeur entre 45 et 360 minutes");
+      Alert.alert("Intervalle invalide", "Veuillez entrer une valeur entre 1 et 360 minutes");
     }
   };
 
@@ -232,7 +232,7 @@ export default function SettingsScreen() {
                 <Timer size={scaled(20)} color={theme.accent} />
               </View>
               <View style={styles.settingContent}>
-                <Text style={styles.settingTitle}>Intervalle d'actualisation (mins)</Text>
+                <Text style={styles.settingTitle}>Intervalle d&apos;actualisation (mins)</Text>
                 <Text style={styles.settingSubtitle}>Mises à jour automatiques en arrière-plan</Text>
               </View>
               <TextInput
@@ -328,7 +328,7 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         <View style={{ marginTop: 24 }}>
-          <Text style={styles.sectionTitle}>Infos sur l'application</Text>
+          <Text style={styles.sectionTitle}>Infos sur l&apos;application</Text>
           <TouchableOpacity
             style={styles.githubButton}
             onPress={() => Linking.openURL('https://github.com/NacreousDawn596/SkewlApp')}
@@ -343,7 +343,7 @@ export default function SettingsScreen() {
 
         <View style={styles.creditsContainer}>
           <Text style={styles.creditsText}>
-            by Aferiad Kamal & El Banane Nada
+            by Aferiad Kamal & Feddoul Salma
             {/* Aferiad Kamal */}
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>

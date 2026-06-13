@@ -2,7 +2,7 @@
   "expo": {
     "name": "SkewlApp Mobile",
     "slug": "skewlapp",
-    "version": "3.6.0",
+    "version": "4.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "kimoo.skewlapp",
@@ -69,12 +69,12 @@
     },
     "extra": {
       "router": {
-        "origin": "https://kamal.aferiad.xyz/"
+        "origin": "https://kamal.aferiad.com/"
       },
       "eas": {
         "projectId": "73930e3e-cffd-442f-9402-eb5dbead92e9"
       }
     },
-    "owner": "nacreousdawn596"
+    "owner": "Aferiad Kamal"
   }
 }

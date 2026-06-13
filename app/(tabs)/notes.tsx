@@ -165,7 +165,6 @@ export default function NotesScreen() {
     void checkAndPoll();
   }, [selectedCategory, poll, hasPolledCategory]);
 
-  // 🔥 NEW: Wrapped with auth error handler
   const dataQuery = useQuery({
     queryKey: ["notes_data", selectedCategory],
     queryFn: withReactQueryAuthHandler(
@@ -238,6 +237,30 @@ export default function NotesScreen() {
     return typeof v === 'string' ? parseFloat(v.replace(',', '.')) : v;
   };
 
+  const getDisplayName = (item: any, mappedName?: string) => {
+    const candidates = [
+      mappedName,
+      item?.Intitule,
+      item?.intitule,
+      item?.Intitulé,
+      item?.name,
+      item?.Name,
+      item?.Libelle,
+      item?.Libellé,
+      item?.Module,
+      item?.Element,
+      item?.Semestre,
+      item?.Niveau,
+      item?.code,
+    ];
+
+    const found = candidates.find(
+      (value) => typeof value === "string" && value.trim().length > 0
+    );
+
+    return found || "Unknown";
+  };
+
   const getTargets = (): string[] => {
     const data = dataQuery.data as any[];
     if (!data || !Array.isArray(data) || !profile?.administrative_info) return [];
@@ -258,29 +281,31 @@ export default function NotesScreen() {
   const targets = getTargets();
   const targetsKey = targets.join("|");
 
-  // 🔥 NEW: Wrapped with auth error handler
   const { data: moduleMappings } = useQuery({
     queryKey: ["global_name_mappings", targetsKey],
     queryFn: withReactQueryAuthHandler(
       async () => {
         const cachedNames = await getCachedElementNames();
-        if (Object.keys(cachedNames).length > 0) {
-          console.log("[Notes] Using permanently cached element names");
-          return cachedNames;
+        const mapping: Record<string, string> = { ...cachedNames };
+
+        if (targets.length === 0) {
+          return mapping;
         }
 
-        if (targets.length === 0) return {};
-        const mapping: Record<string, string> = {};
         await Promise.all(targets.map(async (target) => {
           const [N, F, S] = target.split("|");
           try {
             const modulesObj = await schoolAppClient.getModules(N, F, S);
             if (modulesObj && typeof modulesObj === 'object') {
               Object.entries(modulesObj).forEach(([modCode, modData]: [string, any]) => {
-                mapping[modCode] = modData.intitule;
+                const moduleName = modData.intitule || modData.Intitule || modData.name || modData.Name;
+                if (moduleName) {
+                  mapping[modCode] = moduleName;
+                }
                 if (Array.isArray(modData.elements)) {
                   modData.elements.forEach((elem: any) => {
-                    if (elem.code) mapping[elem.code] = elem.intitule;
+                    const elementName = elem.intitule || elem.Intitule || elem.name || elem.Name;
+                    if (elem.code && elementName) mapping[elem.code] = elementName;
                   });
                 }
               });
@@ -332,7 +357,6 @@ export default function NotesScreen() {
     statsValue: { fontSize: 14, fontWeight: "700", color: theme.accent, textAlign: "right" },
   });
 
-  // 🔥 NEW: Wrapped with auth error handler
   const { data: statsData, isLoading: statsLoading } = useQuery({
     queryKey: ["element_stats", selectedItem?.CodeElem || selectedItem?.CodeMod, statsType, itemType],
     queryFn: withReactQueryAuthHandler(
@@ -434,7 +458,8 @@ export default function NotesScreen() {
       const codeKey = item.CodeElem || item.CodeMod || item.Semestre || item.Niveau || "Unknown";
       const noteVal = getVal(item);
       const gradeStr = item.note || item.Moy || item.Moy_Annee || item.Moy_SEM || "--";
-      const props = { key: index, item: { ...item, noteVal, gradeStr, code: codeKey }, name: mappings[codeKey], theme, styles, category: selectedCategory, onStatsPress: handleStatsPress };
+      const displayName = getDisplayName(item, mappings[codeKey]);
+      const props = { key: index, item: { ...item, noteVal, gradeStr, code: codeKey }, name: displayName, theme, styles, category: selectedCategory, onStatsPress: handleStatsPress };
       if (selectedCategory === "currentElems" || selectedCategory === "allElems") return <NoteElementItem {...props} />;
       if (selectedCategory === "currentMods" || selectedCategory === "allMods") return <NoteModuleItem {...props} />;
       return <NoteSummaryItem {...props} />;
@@ -500,7 +525,7 @@ export default function NotesScreen() {
           <View style={styles.statsModal}>
             <ScrollView>
               <View style={styles.statsHeader}>
-                <Text style={styles.statsTitle}>{moduleMappings?.[selectedItem?.code] || selectedItem?.Intitule || selectedItem?.code} ({selectedItem?.code})</Text>
+                <Text style={styles.statsTitle}>{getDisplayName(selectedItem, moduleMappings?.[selectedItem?.code])} ({selectedItem?.code})</Text>
                 <TouchableOpacity onPress={() => setStatsModalVisible(false)}>
                   <X size={24} color={theme.text} />
                 </TouchableOpacity>

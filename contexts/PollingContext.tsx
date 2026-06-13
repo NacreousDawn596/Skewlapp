@@ -169,7 +169,7 @@ export const [PollingProvider, usePolling] =
       await poll(false);
 
       const settings = await getPollingSettings();
-      const intervalMs = Math.max(settings.interval, 45) * 60 * 1000;
+      const intervalMs = settings.interval * 60 * 1000;
 
       intervalRef.current = setInterval(() => {
         poll(true);

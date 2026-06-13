@@ -72,7 +72,6 @@ export default function HomeScreen() {
   const { lastPollTime, isPolling, poll } = usePolling();
   const netInfo = useNetInfo();
 
-  // 🔥 NEW: Wrapped with auth error handler
   const activityQuery = useQuery({
     queryKey: ["activity"],
     queryFn: withReactQueryAuthHandler(
@@ -86,7 +85,6 @@ export default function HomeScreen() {
     refetchOnReconnect: true,
   });
 
-  // 🔥 NEW: Wrapped with auth error handler
   const absencesQuery = useQuery({
     queryKey: ["absences_summary"],
     queryFn: withReactQueryAuthHandler(
@@ -100,7 +98,6 @@ export default function HomeScreen() {
     refetchOnReconnect: true,
   });
 
-  // 🔥 NEW: Wrapped with auth error handler
   const sanctionsQuery = useQuery({
     queryKey: ["sanctions_summary"],
     queryFn: withReactQueryAuthHandler(

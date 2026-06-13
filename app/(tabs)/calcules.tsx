@@ -10,17 +10,23 @@ import {
   Platform,
   UIManager,
   ActivityIndicator,
-  Dimensions,
   KeyboardAvoidingView,
   Animated,
-  Alert
 } from "react-native";
 import { useTheme } from "@/themes/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Stack } from "expo-router";
 import { schoolAppClient, secureStorage } from "@/api/client";
 import { useQuery } from "@tanstack/react-query";
-import { getCachedData, getCachedModules, setCachedModules } from "@/services/cache";
+import {
+  buildCalculatorElementNames,
+  getCalculatorCacheState,
+  getCalculatorSelectionCache,
+  getCachedData,
+  getCachedModules,
+  setCachedModules,
+  updateCalculatorSelectionCache,
+} from "@/services/cache";
 import { usePolling } from "@/contexts/PollingContext";
 import { useNetInfo } from "@react-native-community/netinfo";
 import { withReactQueryAuthHandler, isUnauthorizedError } from "@/services/apiErrorHandler";
@@ -35,8 +41,6 @@ import { BlurView } from "expo-blur";
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-
-const { width } = Dimensions.get("window");
 
 const ElementRow = ({ elem, theme, styles, updateMark, getStatusColor }: any) => {
   return (
@@ -105,12 +109,47 @@ export default function CalculesScreen() {
   const [selSemestre, setSelSemestre] = useState("S1");
   const [userMarks, setUserMarks] = useState<Record<string, { CC?: string, TP?: string, EX?: string }>>({});
   const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
+  const marksLoadedRef = useRef(false);
 
-  // 🔥 NEW: Use the auth error handler wrapper
+  const calculatorSelection = useMemo(
+    () => ({
+      niveau: selNiveau,
+      filiere: selFiliere,
+      semestre: selSemestre,
+    }),
+    [selNiveau, selFiliere, selSemestre]
+  );
+
   const filieresQuery = useQuery({
     queryKey: ["all_filieres"],
     queryFn: withReactQueryAuthHandler(
-      () => getCachedData("filieres"),
+      async () => {
+        const cached = await getCachedData("filieres");
+        if (cached) {
+          await updateCalculatorSelectionCache(calculatorSelection, {
+            filieres: cached,
+          });
+          return cached;
+        }
+
+        const calculatorCache = await getCalculatorCacheState();
+        if (calculatorCache?.filieres) {
+          return calculatorCache.filieres;
+        }
+
+        if (netInfo.isInternetReachable !== false) {
+          await poll(false);
+          const refreshed = await getCachedData("filieres");
+          if (refreshed) {
+            await updateCalculatorSelectionCache(calculatorSelection, {
+              filieres: refreshed,
+            });
+            return refreshed;
+          }
+        }
+
+        return null;
+      },
       handleUnauthorized
     ),
     staleTime: Infinity,
@@ -120,7 +159,6 @@ export default function CalculesScreen() {
     refetchOnReconnect: false,
   });
 
-  // 🔥 NEW: Use the auth error handler wrapper
   const modulesLookupQuery = useQuery({
     queryKey: ["lookup_modules_calc", selNiveau, selFiliere, selSemestre],
     queryFn: withReactQueryAuthHandler(
@@ -138,13 +176,16 @@ export default function CalculesScreen() {
             if (!(netInfo.isInternetReachable === false)) {
               await setCachedModules(selNiveau, selFiliere, selSemestre, freshData);
               console.log(`[Calcules] Cached fresh data for ${cacheKey}`);
+              await updateCalculatorSelectionCache(calculatorSelection, {
+                modulesLookup: freshData,
+                elementNames: buildCalculatorElementNames(freshData),
+              });
             } else {
               console.log(`[Calcules] Offline, not caching for ${cacheKey}`);
             }
             return freshData;
           }
         } catch (e: any) {
-          // 🔥 NEW: Let UNAUTHORIZED propagate - wrapper will handle it
           if (isUnauthorizedError(e)) {
             throw e;
           }
@@ -157,11 +198,39 @@ export default function CalculesScreen() {
         
         if (hasCachedContent) {
           console.log(`[Calcules] Using cached data for ${cacheKey}`);
+          await updateCalculatorSelectionCache(calculatorSelection, {
+            modulesLookup: cachedData,
+            elementNames: buildCalculatorElementNames(cachedData),
+          });
           return cachedData;
+        }
+
+        const calculatorCache = await getCalculatorSelectionCache(
+          selNiveau,
+          selFiliere,
+          selSemestre
+        );
+
+        if (calculatorCache?.modulesLookup) {
+          console.log(`[Calcules] Using calculator snapshot for ${cacheKey}`);
+          return calculatorCache.modulesLookup;
+        }
+
+        const calculatorState = await getCalculatorCacheState();
+
+        if (calculatorState?.modulesLookup) {
+          console.log(`[Calcules] Using root calculator snapshot for ${cacheKey}`);
+          await updateCalculatorSelectionCache(calculatorSelection, {
+            modulesLookup: calculatorState.modulesLookup,
+            elementNames:
+              calculatorState.elementNames ||
+              buildCalculatorElementNames(calculatorState.modulesLookup),
+          });
+          return calculatorState.modulesLookup;
         }
         
         console.log(`[Calcules] No valid data found for ${cacheKey}`);
-        throw new Error("No data available (offline)");
+        return null;
       },
       handleUnauthorized
     ),
@@ -180,11 +249,43 @@ export default function CalculesScreen() {
         const cached = await getCachedData("currentElems");
         if (cached) {
           console.log("[Calcules] Using cached currentElems");
+          await updateCalculatorSelectionCache(calculatorSelection, {
+            currentElems: cached,
+          });
           return cached;
         }
+        
+        const calculatorCache = await getCalculatorSelectionCache(
+          selNiveau,
+          selFiliere,
+          selSemestre
+        );
+
+        if (calculatorCache?.currentElems) {
+          console.log("[Calcules] Using calculator snapshot for currentElems");
+          return calculatorCache.currentElems;
+        }
+
+        const calculatorState = await getCalculatorCacheState();
+
+        if (calculatorState?.currentElems) {
+          console.log("[Calcules] Using root calculator snapshot for currentElems");
+          await updateCalculatorSelectionCache(calculatorSelection, {
+            currentElems: calculatorState.currentElems,
+          });
+          return calculatorState.currentElems;
+        }
+
         console.log("[Calcules] No cache for currentElems, triggering poll...");
-        await poll(false);
+        if (netInfo.isInternetReachable !== false) {
+          await poll(false);
+        }
         const refreshed = await getCachedData("currentElems");
+        if (refreshed) {
+          await updateCalculatorSelectionCache(calculatorSelection, {
+            currentElems: refreshed,
+          });
+        }
         return refreshed || null;
       },
       handleUnauthorized
@@ -203,11 +304,43 @@ export default function CalculesScreen() {
         const cached = await getCachedData("allElems");
         if (cached) {
           console.log("[Calcules] Using cached allElems");
+          await updateCalculatorSelectionCache(calculatorSelection, {
+            historyElems: cached,
+          });
           return cached;
         }
+        
+        const calculatorCache = await getCalculatorSelectionCache(
+          selNiveau,
+          selFiliere,
+          selSemestre
+        );
+
+        if (calculatorCache?.historyElems) {
+          console.log("[Calcules] Using calculator snapshot for history allElems");
+          return calculatorCache.historyElems;
+        }
+
+        const calculatorState = await getCalculatorCacheState();
+
+        if (calculatorState?.historyElems) {
+          console.log("[Calcules] Using root calculator snapshot for history allElems");
+          await updateCalculatorSelectionCache(calculatorSelection, {
+            historyElems: calculatorState.historyElems,
+          });
+          return calculatorState.historyElems;
+        }
+
         console.log("[Calcules] No cache for allElems, triggering poll...");
-        await poll(false);
+        if (netInfo.isInternetReachable !== false) {
+          await poll(false);
+        }
         const refreshed = await getCachedData("allElems");
+        if (refreshed) {
+          await updateCalculatorSelectionCache(calculatorSelection, {
+            historyElems: refreshed,
+          });
+        }
         return refreshed || null;
       },
       handleUnauthorized
@@ -227,30 +360,62 @@ export default function CalculesScreen() {
       if (filieresQuery.data) {
         const match = (filieresQuery.data as any[]).find(f => f.Code === userF || f.Intitule === userF);
         setSelFiliere(match?.Code || (filieresQuery.data as any[])[0]?.Code || "");
+      } else if (userF) {
+        setSelFiliere(userF);
       }
     }
   }, [profile, filieresQuery.data]);
 
   useEffect(() => {
+    marksLoadedRef.current = false;
+
     const loadState = async () => {
       const key = `calc_storage_${selNiveau}_${selFiliere}_${selSemestre}`;
       const saved = await secureStorage.getItem(key);
       if (saved) {
-        try { setUserMarks(JSON.parse(saved)); } catch (e) { }
+        try {
+          const parsed = JSON.parse(saved);
+          setUserMarks(parsed);
+          marksLoadedRef.current = true;
+          await updateCalculatorSelectionCache(calculatorSelection, {
+            userMarks: parsed,
+          });
+          return;
+        } catch (e) {
+          console.log("[Calcules] Failed to parse persisted marks, falling back to snapshot", e);
+        }
+      }
+
+      const calculatorCache = await getCalculatorSelectionCache(
+        selNiveau,
+        selFiliere,
+        selSemestre
+      );
+
+      if (calculatorCache?.userMarks) {
+        setUserMarks(calculatorCache.userMarks);
+        await secureStorage.setItem(key, JSON.stringify(calculatorCache.userMarks));
       } else {
         setUserMarks({});
       }
+
+      marksLoadedRef.current = true;
     };
     if (selFiliere) loadState();
-  }, [selNiveau, selFiliere, selSemestre]);
+  }, [calculatorSelection, selNiveau, selFiliere, selSemestre]);
 
   useEffect(() => {
+    if (!marksLoadedRef.current || !selFiliere) return;
+
     const saveState = async () => {
       const key = `calc_storage_${selNiveau}_${selFiliere}_${selSemestre}`;
       await secureStorage.setItem(key, JSON.stringify(userMarks));
+      await updateCalculatorSelectionCache(calculatorSelection, {
+        userMarks,
+      });
     };
-    if (Object.keys(userMarks).length > 0) saveState();
-  }, [userMarks]);
+    void saveState();
+  }, [userMarks, calculatorSelection, selNiveau, selFiliere, selSemestre]);
 
   const toggleModule = (code: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -328,7 +493,7 @@ export default function CalculesScreen() {
       Animated.timing(gpaAnim, { toValue: 1.2, duration: 150, useNativeDriver: true }),
       Animated.timing(gpaAnim, { toValue: 1, duration: 150, useNativeDriver: true }),
     ]).start();
-  }, [calculatedData.globalAvg]);
+  }, [calculatedData.globalAvg, gpaAnim]);
 
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
