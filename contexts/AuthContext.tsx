@@ -168,12 +168,76 @@ export const [AuthProvider, useAuth] =
     });
 
     /**
-     * 🔥 NEW: Centralized UNAUTHORIZED handler
-     * This is called from ANYWHERE in the app when UNAUTHORIZED is caught
-     * ONE PLACE ONLY - no scattered logout logic
+     * Re-authenticate silently with saved credentials when possible.
+     * Falls back to cached profile while offline.
+     */
+    const attemptSilentReauth = async (): Promise<boolean> => {
+      const credentials = await apiClient.getCredentials();
+      if (!credentials) {
+        return false;
+      }
+
+      const net = await NetInfo.fetch();
+      if (!net.isConnected) {
+        console.log("[AuthContext] Offline - keeping cached session alive");
+        return !!profile;
+      }
+
+      try {
+        console.log("[AuthContext] Attempting silent re-authentication...");
+        const success = await schoolAppClient.login(
+          credentials.email,
+          credentials.pass
+        );
+
+        if (!success) {
+          return false;
+        }
+
+        const profileData =
+          (await schoolAppClient.getProfile()) as UserProfile | null;
+
+        if (!profileData) {
+          return false;
+        }
+
+        await secureStorage.setItem(
+          PROFILE_KEY,
+          JSON.stringify(profileData)
+        );
+
+        setProfile(profileData);
+        setIsAuthenticated(true);
+
+        console.log("[AuthContext] Silent re-authentication succeeded");
+        return true;
+      } catch (error) {
+        console.error("[AuthContext] Silent re-authentication failed:", error);
+        return false;
+      }
+    };
+
+    /**
+     * Centralized UNAUTHORIZED handler.
+     * While offline, stay authenticated on cached data.
+     * When back online, try saved credentials before forcing logout.
      */
     const handleUnauthorized = async () => {
-      console.warn("[AuthContext] Session expired - logging out");
+      const net = await NetInfo.fetch();
+
+      if (!net.isConnected) {
+        console.warn(
+          "[AuthContext] Ignoring UNAUTHORIZED while offline and keeping cached session"
+        );
+        return;
+      }
+
+      const recovered = await attemptSilentReauth();
+      if (recovered) {
+        return;
+      }
+
+      console.warn("[AuthContext] Session expired and silent re-auth failed - logging out");
       await logoutMutation.mutateAsync();
     };
 

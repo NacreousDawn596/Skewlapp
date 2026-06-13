@@ -114,6 +114,16 @@ export default function HomeScreen() {
     refetchOnReconnect: true,
   });
 
+  useEffect(() => {
+    if (!lastPollTime) {
+      return;
+    }
+
+    void absencesQuery.refetch();
+    void sanctionsQuery.refetch();
+    void activityQuery.refetch();
+  }, [lastPollTime]);
+
   const pollingSettingsQuery = useQuery({
     queryKey: ["pollingSettings"],
     queryFn: getPollingSettings,
@@ -365,17 +375,36 @@ export default function HomeScreen() {
   const getAbsenceCount = () => {
     if (absencesQuery.isLoading && !absencesQuery.data) return "--";
     const data = absencesQuery.data as any;
-    if (data && data.details) {
+    if (Array.isArray(data?.details)) {
       return data.details.length.toString();
     }
-    return lastPollTime ? "0" : "--";
+    return "--";
   };
 
   const getSanctionValue = () => {
     if (sanctionsQuery.isLoading && !sanctionsQuery.data) return "--";
     const data = sanctionsQuery.data as any;
-    if (!data) return lastPollTime ? "None" : "--";
-    return data.Sanction || "None";
+    if (!data) return "--";
+
+    if (typeof data.Sanction === "string" && data.Sanction.trim().length > 0) {
+      return data.Sanction;
+    }
+
+    const sanctionDetails = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.details)
+        ? data.details
+        : [];
+
+    if (sanctionDetails.length > 0) {
+      return "Recorded";
+    }
+
+    if (Array.isArray(data?.Elements_non_autorises) && data.Elements_non_autorises.length > 0) {
+      return "Restricted";
+    }
+
+    return "--";
   };
 
   const isOffline = netInfo.isInternetReachable === false;
