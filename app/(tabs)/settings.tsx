@@ -28,6 +28,7 @@ import {
   getPollingSettings,
   savePollingSettings,
 } from "@/services/polling";
+import { usePolling } from "@/contexts/PollingContext";
 import { useQuery, useMutation } from "@tanstack/react-query";
 
 export default function SettingsScreen() {
@@ -35,6 +36,7 @@ export default function SettingsScreen() {
   const scale = useFontScale();
   const scaled = (size: number) => size * scale;
   const { logout } = useAuth();
+  const { startPolling, stopPolling } = usePolling();
 
   const settingsQuery = useQuery({
     queryKey: ["settings"],
@@ -50,9 +52,14 @@ export default function SettingsScreen() {
 
   const [showThemePicker, setShowThemePicker] = useState(false);
   const [showFontSizePicker, setShowFontSizePicker] = useState(false);
-  const [intervalInput, setIntervalInput] = useState(
-    settingsQuery.data?.interval.toString() || "45"
-  );
+  const [intervalInput, setIntervalInput] = useState("45");
+
+  // Sync input with loaded settings
+  React.useEffect(() => {
+    if (settingsQuery.data?.interval) {
+      setIntervalInput(settingsQuery.data.interval.toString());
+    }
+  }, [settingsQuery.data?.interval]);
 
   const handleLogout = () => {
     Alert.alert(
@@ -232,8 +239,29 @@ export default function SettingsScreen() {
                 <Timer size={scaled(20)} color={theme.accent} />
               </View>
               <View style={styles.settingContent}>
+                <Text style={styles.settingTitle}>Actualisation automatique</Text>
+                <Text style={styles.settingSubtitle}>Mises à jour des données en arrière-plan</Text>
+              </View>
+              <Switch
+                value={settingsQuery.data?.enabled ?? true}
+                onValueChange={async (value) => {
+                  await updateSettingsMutation.mutateAsync({ enabled: value });
+                  if (value) {
+                    startPolling();
+                  } else {
+                    stopPolling();
+                  }
+                }}
+                trackColor={{ false: theme.muted, true: theme.accent }}
+              />
+            </View>
+            <View style={styles.settingItem}>
+              <View style={styles.iconContainer}>
+                <Timer size={scaled(20)} color={theme.accent} />
+              </View>
+              <View style={styles.settingContent}>
                 <Text style={styles.settingTitle}>Intervalle d&apos;actualisation (mins)</Text>
-                <Text style={styles.settingSubtitle}>Mises à jour automatiques en arrière-plan</Text>
+                <Text style={styles.settingSubtitle}>Fréquence des mises à jour</Text>
               </View>
               <TextInput
                 style={styles.intervalInput}
@@ -241,6 +269,7 @@ export default function SettingsScreen() {
                 onChangeText={setIntervalInput}
                 onBlur={handleIntervalChange}
                 keyboardType="number-pad"
+                editable={settingsQuery.data?.enabled ?? true}
               />
             </View>
           </View>

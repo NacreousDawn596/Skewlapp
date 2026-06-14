@@ -222,7 +222,7 @@ export const buildCalculatorElementNames = (
 export const clearAllCache = async (): Promise<void> => {
   try {
     const keys = await AsyncStorage.getAllKeys();
-    const skewlKeys = keys.filter(k => k.startsWith(CACHE_PREFIX) || k === ACTIVITY_KEY || k === "skewl_poll_settings" || k.startsWith("calc_storage_") || k === CALCULATOR_STATE_KEY);
+    const skewlKeys = keys.filter(k => k.startsWith(CACHE_PREFIX) || k === ACTIVITY_KEY || k.startsWith("calc_storage_") || k === CALCULATOR_STATE_KEY);
     await AsyncStorage.multiRemove(skewlKeys);
     console.log("🧹 All app caches cleared");
   } catch (error) {

@@ -1,11 +1,28 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Network from 'expo-network';
+import * as Location from 'expo-location';
+import * as TaskManager from 'expo-task-manager';
+import { Platform } from 'react-native';
 import { schoolAppClient } from "../api/client";
 import { ActivityItem } from "../types/api";
 import { scheduleNotification } from "./notifications";
 import { getCachedData, setCachedData, cleanData } from "./cache";
 import { addActivity } from "./activity";
 import { detectChanges } from "./changeDetection";
+
+const KEEP_ALIVE_TASK = "background-keep-alive-task";
+
+// Define the dummy task for the foreground service
+if (!TaskManager.isTaskDefined(KEEP_ALIVE_TASK)) {
+  TaskManager.defineTask(KEEP_ALIVE_TASK, async ({ data, error }) => {
+    if (error) {
+      console.error(`[KeepAlive] Task error: ${error.message}`);
+      return;
+    }
+    // This task does nothing, just keeps the service alive
+  });
+}
+
 
 export const POLL_ENDPOINTS = [
   "currentElems",
@@ -27,6 +44,7 @@ export interface PollSettings {
   notifyAbsences: boolean;
   notifySanctions: boolean;
   notificationsEnabled: boolean;
+  enabled: boolean;
 }
 
 const DEFAULT_SETTINGS: PollSettings = {
@@ -35,6 +53,7 @@ const DEFAULT_SETTINGS: PollSettings = {
   notifyAbsences: true,
   notifySanctions: true,
   notificationsEnabled: true,
+  enabled: true,
 };
 
 const lastFetchTime: Record<PollEndpoint, number> = {
@@ -111,6 +130,66 @@ const fetchMap: Record<PollEndpoint, () => Promise<any>> = {
   sanctions: () => schoolAppClient.getSanctions(),
   filieres: () => schoolAppClient.getFilieres(),
 };
+
+/**
+ * 🔥 NEW: Foreground Service Keep-Alive
+ * Uses expo-location to start a persistent process on Android
+ */
+export const startForegroundService = async () => {
+  if (Platform.OS !== 'android') return;
+
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      console.warn('[KeepAlive] Foreground permissions not granted');
+      return;
+    }
+
+    await Location.startLocationUpdatesAsync(KEEP_ALIVE_TASK, {
+      accuracy: Location.Accuracy.Balanced,
+      distanceInterval: 1000, // Minimal updates
+      deferredUpdatesInterval: 60000,
+      foregroundService: {
+        notificationTitle: "SkewlApp est actif",
+        notificationBody: "Actualisation de vos données en temps réel...",
+        notificationColor: "#8A2BE2",
+      },
+    });
+    console.log('[KeepAlive] Foreground service started');
+  } catch (err) {
+    console.error('[KeepAlive] Failed to start foreground service:', err);
+  }
+};
+
+export const stopForegroundService = async () => {
+  if (Platform.OS !== 'android') return;
+  try {
+    const isRunning = await Location.hasStartedLocationUpdatesAsync(KEEP_ALIVE_TASK);
+    if (isRunning) {
+      await Location.stopLocationUpdatesAsync(KEEP_ALIVE_TASK);
+      console.log('[KeepAlive] Foreground service stopped');
+    }
+  } catch (err) {
+    console.error('[KeepAlive] Failed to stop foreground service:', err);
+  }
+};
+
+/**
+ * 🔥 NEW: Optimized polling for background
+ * Only polls essential data to save battery
+ */
+export const pollEssentialEndpoints = async (silent: boolean = true): Promise<void> => {
+    const settings = await getPollingSettings();
+    if (settings.enabled === false) return;
+    
+    // In background, we only care about real-time events
+    const essential = ["currentElems", "absences"] as const;
+
+    await Promise.all(
+        essential.map((endpoint) => pollEndpoint(endpoint, settings, silent))
+    );
+};
+
 
 // Check if endpoint should be fetched based on intelligent caching rules
 const shouldFetchEndpoint = (

@@ -9,7 +9,10 @@ import * as Network from "expo-network";
 import {
   getPollingSettings,
   pollAllEndpoints,
+  pollEssentialEndpoints,
   resetFetchTimes,
+  startForegroundService,
+  stopForegroundService,
 } from "../services/polling";
 import { useAuth } from "./AuthContext";
 import { runSinglePoll } from "@/services/pollExecutor";
@@ -41,18 +44,15 @@ TaskManager.defineTask(BACKGROUND_POLL_TASK, async () => {
     }
 
     try {
-      // 🔥 NEW: Background task just stops on UNAUTHORIZED
-      // It does NOT logout, does NOT mutate state, does NOT navigate
-      await runSinglePoll(() => pollAllEndpoints(true));
+      // For background tasks, we can use a lighter poll to be faster
+      await runSinglePoll(() => pollEssentialEndpoints(true));
       return BackgroundFetch.BackgroundFetchResult.NewData;
     } catch (e: any) {
-      // 🔥 NEW: If UNAUTHORIZED, just stop silently
       if (e.message === "UNAUTHORIZED") {
         console.log("[BackgroundFetch] Session expired - stopping background work");
         return BackgroundFetch.BackgroundFetchResult.NoData;
       }
       
-      // Other errors
       console.error("[BackgroundFetch] Error:", e);
       return BackgroundFetch.BackgroundFetchResult.Failed;
     }
@@ -98,7 +98,6 @@ export const [PollingProvider, usePolling] =
     /*                         NETWORK SOURCE OF TRUTH                         */
     /* ---------------------------------------------------------------------- */
 
-    // 🔥 NEW: NetInfo is ONLY for UI - not for auth decisions
     const isNetworkReady =
       netInfo.isConnected === true &&
       netInfo.isInternetReachable === true;
@@ -115,18 +114,14 @@ export const [PollingProvider, usePolling] =
           setIsPolling(true);
           
           try {
-            // 🔥 NEW: Catch UNAUTHORIZED and handle it centrally
             await pollAllEndpoints(silent);
             setLastPollTime(Date.now());
           } catch (e: any) {
             if (e.message === "UNAUTHORIZED") {
               console.warn("[Polling] Session expired during poll");
-              // 🔥 Stop polling immediately
               stopPolling();
-              // 🔥 Call central handler (will logout and navigate)
               await handleUnauthorized();
             } else {
-              // Other errors - just log
               console.error("[Polling] Error:", e);
             }
           } finally {
@@ -143,17 +138,30 @@ export const [PollingProvider, usePolling] =
 
     const registerBackgroundTask = async () => {
       const settings = await getPollingSettings();
-      const intervalSecs = Math.max(settings.interval * 60, 900);
+      // On Android with unrestricted battery, we can try to push it
+      // but BackgroundFetch itself is still limited by the OS to ~15m.
+      // THE FOREGROUND SERVICE will keep the app process alive so setInterval works!
+      const intervalSecs = Math.max(settings.interval * 60, 60); 
 
-      await BackgroundFetch.registerTaskAsync(BACKGROUND_POLL_TASK, {
-        minimumInterval: intervalSecs,
-        stopOnTerminate: false,
-        startOnBoot: true,
-      });
+      try {
+        await BackgroundFetch.registerTaskAsync(BACKGROUND_POLL_TASK, {
+          minimumInterval: intervalSecs,
+          stopOnTerminate: false,
+          startOnBoot: true,
+        });
+        
+        // Android-only keep-alive
+        await startForegroundService();
+      } catch (e) {
+        console.error("[PollingContext] Registration failed:", e);
+      }
     };
 
     const unregisterBackgroundTask = async () => {
-      await BackgroundFetch.unregisterTaskAsync(BACKGROUND_POLL_TASK);
+      try {
+        await BackgroundFetch.unregisterTaskAsync(BACKGROUND_POLL_TASK);
+      } catch (e) {}
+      await stopForegroundService();
     };
 
     /* ---------------------------------------------------------------------- */
@@ -164,13 +172,20 @@ export const [PollingProvider, usePolling] =
       if (hasStartedRef.current) return;
       if (!isAuthenticated || !isNetworkReady) return;
 
+      let settings = await getPollingSettings();
+      if (settings.enabled === false) {
+        console.log("[PollingContext] Polling is disabled in settings");
+        return;
+      }
+
       hasStartedRef.current = true;
 
       await poll(false);
 
-      const settings = await getPollingSettings();
+      settings = await getPollingSettings();
       const intervalMs = settings.interval * 60 * 1000;
 
+      if (intervalRef.current) clearInterval(intervalRef.current);
       intervalRef.current = setInterval(() => {
         poll(true);
       }, intervalMs);
@@ -200,11 +215,16 @@ export const [PollingProvider, usePolling] =
           appState.current.match(/inactive|background/) &&
           next === "active"
         ) {
-          // 🔥 NEW: Don't force logout on app resume
-          // Just try to poll - if auth is dead, polling will catch it
           if (isAuthenticated && isNetworkReady) {
             startPolling();
           }
+        }
+
+        // When going background, ensure service is up if polling is active
+        if (next === "background" || next === "inactive") {
+            if (isAuthenticated && hasStartedRef.current) {
+                startForegroundService();
+            }
         }
 
         appState.current = next;
@@ -242,9 +262,6 @@ export const [PollingProvider, usePolling] =
 
       if (wasOfflineRef.current && netInfo.isInternetReachable === true) {
         wasOfflineRef.current = false;
-
-        // 🔥 NEW: Just reset fetch times and poll
-        // If auth is dead, polling will catch it
         resetFetchTimes();
         
         if (isAuthenticated && isNetworkReady) {
