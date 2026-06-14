@@ -1,7 +1,7 @@
 {
   "name": "skewlapp",
   "main": "expo-router/entry",
-  "version": "5.0.1",
+  "version": "5.0.5",
   "scripts": {
     "start": "expo start",
     "start-web": "expo start --web",
