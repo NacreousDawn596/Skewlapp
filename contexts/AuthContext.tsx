@@ -1,7 +1,7 @@
 import createContextHook from "@nkzw/create-context-hook";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import NetInfo from "@react-native-community/netinfo";
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { apiClient, schoolAppClient, secureStorage } from "../api/client";
 import { clearAllCache } from "../services/cache";
@@ -52,8 +52,15 @@ export const [AuthProvider, useAuth] =
               if (success) {
                 const profileData =
                   (await schoolAppClient.getProfile()) as UserProfile | null;
-
+                
                 if (profileData) {
+                  // 🔥 NEW: Extract session ID from cookie jar for photo fetching
+                  const cookies = await ((schoolAppClient as any).httpClient.cookieJar as any).get((schoolAppClient as any).baseUrl);
+                  const sessionIdMatch = cookies.match(/JSESSIONID=([^;]+)/);
+                  if (sessionIdMatch) {
+                    profileData.session_id = sessionIdMatch[1];
+                  }
+
                   await secureStorage.setItem(
                     PROFILE_KEY,
                     JSON.stringify(profileData)
@@ -132,6 +139,13 @@ export const [AuthProvider, useAuth] =
           throw new Error("Login succeeded but profile fetch failed.");
         }
 
+        // 🔥 NEW: Extract session ID from cookie jar for photo fetching
+        const cookies = await ((schoolAppClient as any).httpClient.cookieJar as any).get((schoolAppClient as any).baseUrl);
+        const sessionIdMatch = cookies.match(/JSESSIONID=([^;]+)/);
+        if (sessionIdMatch) {
+          profileData.session_id = sessionIdMatch[1];
+        }
+
         await apiClient.saveCredentials(email, password);
         await secureStorage.setItem(
           PROFILE_KEY,
@@ -171,7 +185,7 @@ export const [AuthProvider, useAuth] =
      * Re-authenticate silently with saved credentials when possible.
      * Falls back to cached profile while offline.
      */
-    const attemptSilentReauth = async (): Promise<boolean> => {
+    const attemptSilentReauth = useCallback(async (): Promise<boolean> => {
       const credentials = await apiClient.getCredentials();
       if (!credentials) {
         return false;
@@ -201,6 +215,13 @@ export const [AuthProvider, useAuth] =
           return false;
         }
 
+        // 🔥 NEW: Extract session ID from cookie jar for photo fetching
+        const cookies = await ((schoolAppClient as any).httpClient.cookieJar as any).get((schoolAppClient as any).baseUrl);
+        const sessionIdMatch = cookies.match(/JSESSIONID=([^;]+)/);
+        if (sessionIdMatch) {
+          profileData.session_id = sessionIdMatch[1];
+        }
+
         await secureStorage.setItem(
           PROFILE_KEY,
           JSON.stringify(profileData)
@@ -215,14 +236,14 @@ export const [AuthProvider, useAuth] =
         console.error("[AuthContext] Silent re-authentication failed:", error);
         return false;
       }
-    };
+    }, [profile]);
 
     /**
      * Centralized UNAUTHORIZED handler.
      * While offline, stay authenticated on cached data.
      * When back online, try saved credentials before forcing logout.
      */
-    const handleUnauthorized = async () => {
+    const handleUnauthorized = useCallback(async () => {
       const net = await NetInfo.fetch();
 
       if (!net.isConnected) {
@@ -239,19 +260,31 @@ export const [AuthProvider, useAuth] =
 
       console.warn("[AuthContext] Session expired and silent re-auth failed - logging out");
       await logoutMutation.mutateAsync();
-    };
+    }, [profile, logoutMutation, attemptSilentReauth]);
 
-    return {
+    const contextValue = useMemo(() => ({
       isAuthenticated,
       profile,
       isLoading: checkAuthQuery.isLoading,
-      login: async (email, password) =>
-        loginMutation.mutateAsync({ email, password }),
+      login: async (email: string, password: string) => {
+        await loginMutation.mutateAsync({ email, password });
+      },
       logout: async () => logoutMutation.mutateAsync(),
       handleUnauthorized,
       loginError,
       isLoggingIn: loginMutation.isPending,
       hasAttemptedAutoLogin:
         checkAuthQuery.data?.autoLoginAttempted ?? false,
-    };
+    }), [
+      isAuthenticated,
+      profile,
+      checkAuthQuery.isLoading,
+      checkAuthQuery.data?.autoLoginAttempted,
+      loginMutation,
+      logoutMutation,
+      handleUnauthorized,
+      loginError,
+    ]);
+
+    return contextValue;
   });

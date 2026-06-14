@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   RefreshControl,
   Modal,
   BackHandler,
+  FlatList,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { useTheme } from "@/themes/ThemeContext";
@@ -168,7 +169,10 @@ export default function NotesScreen() {
   const dataQuery = useQuery({
     queryKey: ["notes_data", selectedCategory],
     queryFn: withReactQueryAuthHandler(
-      () => (selectedCategory ? getCachedData(selectedCategory) : null),
+      async () => {
+        if (!selectedCategory) return null;
+        return getCachedData(selectedCategory);
+      },
       handleUnauthorized
     ),
     enabled: !!selectedCategory,
@@ -180,12 +184,11 @@ export default function NotesScreen() {
   });
 
   const handleCategoryPress = (category: Category) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    // 🔥 OPTIMIZATION: Remove LayoutAnimation for complex lists to avoid Android native crashes
     setSelectedCategory(category);
   };
 
   const handleBack = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setSelectedCategory(null);
   };
 
@@ -261,10 +264,10 @@ export default function NotesScreen() {
     return found || "Unknown";
   };
 
-  const getTargets = (): string[] => {
+  const targets = useMemo((): string[] => {
     const data = dataQuery.data as any[];
     if (!data || !Array.isArray(data) || !profile?.administrative_info) return [];
-    const targets = new Set<string>();
+    const targetsSet = new Set<string>();
     data.forEach(item => {
       const code = item.CodeElem || item.CodeMod;
       if (code) {
@@ -272,13 +275,11 @@ export default function NotesScreen() {
         const N = getNiveauFromSemestre(S);
         const admin = profile.administrative_info;
         const F = admin.Filière || admin.Filiere;
-        if (N && F && S) targets.add(`${N}|${F}|${S}`);
+        if (N && F && S) targetsSet.add(`${N}|${F}|${S}`);
       }
     });
-    return Array.from(targets).sort();
-  };
-
-  const targets = getTargets();
+    return Array.from(targetsSet).sort();
+  }, [dataQuery.data, profile]);
   const targetsKey = targets.join("|");
 
   const { data: moduleMappings } = useQuery({
@@ -292,7 +293,8 @@ export default function NotesScreen() {
           return mapping;
         }
 
-        await Promise.all(targets.map(async (target) => {
+        // 🔥 OPTIMIZATION: Limited concurrency/Sequential fetch to avoid JS thread freeze
+        for (const target of targets) {
           const [N, F, S] = target.split("|");
           try {
             const modulesObj = await schoolAppClient.getModules(N, F, S);
@@ -311,7 +313,7 @@ export default function NotesScreen() {
               });
             }
           } catch (e) { }
-        }));
+        }
 
         if (Object.keys(mapping).length > 0) {
           await setCachedElementNames(mapping);
@@ -517,7 +519,33 @@ export default function NotesScreen() {
               </TouchableOpacity>
             ))}
           </View>
-        ) : renderContent()}
+        ) : (
+          <FlatList
+            data={(dataQuery.data as any[]) || []}
+            keyExtractor={(item, index) => `${selectedCategory}_${index}`}
+            renderItem={({ item, index }) => {
+              const mappings = (moduleMappings && typeof moduleMappings === 'object') ? moduleMappings : {};
+              const codeKey = item.CodeElem || item.CodeMod || item.Semestre || item.Niveau || "Unknown";
+              const noteVal = getVal(item);
+              const gradeStr = item.note || item.Moy || item.Moy_Annee || item.Moy_SEM || "--";
+              const displayName = getDisplayName(item, mappings[codeKey]);
+              
+              const props = { 
+                item: { ...item, noteVal, gradeStr, code: codeKey }, 
+                name: displayName, 
+                theme, 
+                styles, 
+                category: selectedCategory, 
+                onStatsPress: handleStatsPress 
+              };
+              
+              if (selectedCategory === "currentElems" || selectedCategory === "allElems") return <NoteElementItem {...props} />;
+              if (selectedCategory === "currentMods" || selectedCategory === "allMods") return <NoteModuleItem {...props} />;
+              return <NoteSummaryItem {...props} />;
+            }}
+            scrollEnabled={false}
+          />
+        )}
       </ScrollView>
 
       <Modal visible={statsModalVisible} transparent={true} animationType="fade">

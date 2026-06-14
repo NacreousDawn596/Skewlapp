@@ -135,8 +135,10 @@ const fetchMap: Record<PollEndpoint, () => Promise<any>> = {
  * 🔥 NEW: Foreground Service Keep-Alive
  * Uses expo-location to start a persistent process on Android
  */
+let isForegroundServiceRunning = false;
+
 export const startForegroundService = async () => {
-  if (Platform.OS !== 'android') return;
+  if (Platform.OS !== 'android' || isForegroundServiceRunning) return;
 
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
@@ -147,7 +149,7 @@ export const startForegroundService = async () => {
 
     await Location.startLocationUpdatesAsync(KEEP_ALIVE_TASK, {
       accuracy: Location.Accuracy.Balanced,
-      distanceInterval: 1000, // Minimal updates
+      distanceInterval: 1000, 
       deferredUpdatesInterval: 60000,
       foregroundService: {
         notificationTitle: "SkewlApp est actif",
@@ -155,6 +157,7 @@ export const startForegroundService = async () => {
         notificationColor: "#8A2BE2",
       },
     });
+    isForegroundServiceRunning = true;
     console.log('[KeepAlive] Foreground service started');
   } catch (err) {
     console.error('[KeepAlive] Failed to start foreground service:', err);
@@ -167,6 +170,7 @@ export const stopForegroundService = async () => {
     const isRunning = await Location.hasStartedLocationUpdatesAsync(KEEP_ALIVE_TASK);
     if (isRunning) {
       await Location.stopLocationUpdatesAsync(KEEP_ALIVE_TASK);
+      isForegroundServiceRunning = false;
       console.log('[KeepAlive] Foreground service stopped');
     }
   } catch (err) {
@@ -275,18 +279,35 @@ export const pollEndpoint = async (
 
   console.log(`[Polling] ${endpoint} update check. Silent: ${silent}`);
 
-  const dataChanged = JSON.stringify(oldData) !== JSON.stringify(newData);
+  // 🔥 OPTIMIZATION: Quick length check before heavy stringification
+  let dataChanged = false;
+  if (!oldData) {
+    dataChanged = true;
+  } else {
+    const oldItemsCount = Array.isArray(oldData) ? oldData.length : Object.keys(oldData).length;
+    const newItemsCount = Array.isArray(newData) ? newData.length : Object.keys(newData).length;
+    
+    if (oldItemsCount !== newItemsCount) {
+      dataChanged = true;
+    } else {
+      const oldDataStr = JSON.stringify(oldData);
+      const newDataStr = JSON.stringify(newData);
+      dataChanged = oldDataStr !== newDataStr;
+    }
+  }
   const hasBaselineCache = oldData !== null;
 
   if (dataChanged && hasBaselineCache) {
-    const changes = detectChanges(
+    // 🔥 OPTIMIZATION: We already know data changed from the caller.
+    // Don't do a full deepEqual on huge objects again here.
+    const activities: ActivityItem[] = detectChanges(
       endpoint,
       oldData || (Array.isArray(newData) ? [] : {}),
       newData,
       settings
     );
 
-    for (const activity of changes) {
+    for (const activity of activities) {
       await addActivity(activity);
 
       const shouldNotify =
@@ -311,8 +332,9 @@ export const pollEndpoint = async (
 /**
  * 🔥 NEW: Poll all endpoints with proper UNAUTHORIZED propagation
  * Throws UNAUTHORIZED if any endpoint fails auth
+ * @returns true if any data changed
  */
-export const pollAllEndpoints = async (silent: boolean = false): Promise<void> => {
+export const pollAllEndpoints = async (silent: boolean = false): Promise<boolean> => {
   const settings = await getPollingSettings();
 
   // 🚫 REMOVED: No more auth check here
@@ -321,10 +343,19 @@ export const pollAllEndpoints = async (silent: boolean = false): Promise<void> =
 
   const regularEndpoints = ["currentElems", "currentMods", "absences"] as const;
   
-  // 🔥 NEW: Don't catch errors here - let them propagate
-  const results = await Promise.all(
-    regularEndpoints.map((endpoint) => pollEndpoint(endpoint, settings, silent))
-  );
+  let anyChanged = false;
+  const results: boolean[] = [];
+
+  // 🔥 OPTIMIZATION: Process regular endpoints sequentially with "breathers"
+  // This prevents saturating the JS thread with multiple JSON stringifications at once.
+  for (const endpoint of regularEndpoints) {
+    const changed = await pollEndpoint(endpoint, settings, silent);
+    results.push(changed);
+    if (changed) anyChanged = true;
+    
+    // Give the JS thread a tiny 30ms breather to process UI events (like scroll/back)
+    await new Promise(resolve => setTimeout(resolve, 30));
+  }
 
   const currentModsChanged = results[1]; // currentMods index
   const absencesChanged = results[2]; // absences index
@@ -336,7 +367,12 @@ export const pollAllEndpoints = async (silent: boolean = false): Promise<void> =
   await pollEndpoint("sanctions", settings, silent, absencesChanged);
 
   // Fetch once on first run (fetch-once endpoints)
-  await pollEndpoint("allElems", settings, silent, false);
-  await pollEndpoint("allMods", settings, silent, false);
-  await pollEndpoint("filieres", settings, silent, false);
+  const onceEndpoints = ["allElems", "allMods", "filieres"] as const;
+  for (const endpoint of onceEndpoints) {
+    const changed = await pollEndpoint(endpoint, settings, silent, false);
+    if (changed) anyChanged = true;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+
+  return anyChanged || semestresChanged;
 };

@@ -8,10 +8,8 @@ export const detectChanges = (
     newData: unknown,
     settings: PollSettings
 ): ActivityItem[] => {
-    if (deepEqual(oldData, newData)) {
-        return [];
-    }
-
+    // 🔥 OPTIMIZATION: Caller already check equality via stringify.
+    // Full deepEqual on huge objects is too expensive on main thread.
     const activities: ActivityItem[] = [];
 
     const getVal = (item: any) => {
@@ -33,13 +31,18 @@ export const detectChanges = (
                 });
             }
 
+            // Optimize: Create a map for O(1) lookups
+            const oldMap = new Map<string, any>();
+            for (const item of oldData) {
+                const key = item.CodeElem || item.CodeMod;
+                if (key) oldMap.set(key, item);
+            }
+
             for (const newItem of newData) {
                 const itemKey = (newItem as any).CodeElem || (newItem as any).CodeMod;
                 if (!itemKey) continue;
 
-                const oldItem = (oldData as any[]).find(
-                    (o) => (o.CodeElem === itemKey) || (o.CodeMod === itemKey)
-                );
+                const oldItem = oldMap.get(itemKey);
 
                 const oldVal = getVal(oldItem || {});
                 const newVal = getVal(newItem);

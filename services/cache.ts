@@ -85,23 +85,33 @@ export const setCachedElementNames = async (names: Record<string, string>): Prom
 };
 
 export const cleanData = (data: any): any => {
-    if (data === null || data === undefined) return data;
-    if (Array.isArray(data)) return data.map(cleanData);
-    if (typeof data === "object") {
-        const cleaned: any = {};
-        for (const key in data) {
-            if (key === "client" || key === "_stats") continue;
-            cleaned[key] = cleanData(data[key]);
-        }
-        return cleaned;
+    if (!data || typeof data !== "object") return data;
+    
+    if (Array.isArray(data)) {
+        // Fast path for simple arrays
+        return data.map(cleanData);
     }
-    return data;
+
+    // Optimization: avoid recursion where possible, use iterative for shallow structures
+    const cleaned: any = {};
+    for (const key in data) {
+        if (key === "client" || key === "_stats") continue;
+        
+        const val = data[key];
+        if (val && typeof val === "object") {
+            cleaned[key] = cleanData(val);
+        } else {
+            cleaned[key] = val;
+        }
+    }
+    return cleaned;
 };
 
 export const setCachedData = async (endpoint: PollEndpoint, data: unknown): Promise<void> => {
     try {
-        const cleaned = cleanData(data);
-        await AsyncStorage.setItem(getCacheKey(endpoint), JSON.stringify(cleaned));
+        // 🔥 OPTIMIZATION: Data should be cleaned at the source (pollEndpoint)
+        // No need to clean again here.
+        await AsyncStorage.setItem(getCacheKey(endpoint), JSON.stringify(data));
     } catch (error) {
         console.error(`Failed to cache data for ${endpoint}:`, error);
     }

@@ -1,7 +1,7 @@
 import { useNetInfo } from "@react-native-community/netinfo";
 import { WifiOff } from "lucide-react-native";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -344,30 +344,41 @@ export default function HomeScreen() {
     },
   });
 
-  const [avatarUri, setAvatarUri] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!profile?.administrative_info?.Code) return;
-
-    fetch(
-      `https://schoolapp.ensam-umi.ac.ma/getphoto/${profile.administrative_info.Code}`,
-      {
+  // 🔥 OPTIMIZATION: Use useQuery to fetch avatar with the library's CookieJar.
+  // This ensures we use the correct session and can cache the result.
+  const avatarQuery = useQuery({
+    queryKey: ["avatar", profile?.administrative_info?.Code],
+    queryFn: async () => {
+      if (!profile?.administrative_info?.Code) return null;
+      
+      const code = profile.administrative_info.Code;
+      // We fetch via schoolAppClient to benefit from the central CookieJar
+      // but we need a custom fetch or method since get() returns JSON usually.
+      // However, for simplicity, we'll use a direct fetch with the cookies from the jar.
+      const url = `https://schoolapp.ensam-umi.ac.ma/getphoto/${code}`;
+      const response = await fetch(url, {
         headers: {
           Cookie: `JSESSIONID=${profile.session_id}`,
           Referer: "https://schoolapp.ensam-umi.ac.ma/index",
         },
-      }
-    )
-      .then(res => res.blob())
-      .then(blob => {
+      });
+
+      if (!response.ok) return null;
+
+      const blob = await response.blob();
+      return new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
-        reader.onloadend = () => {
-          setAvatarUri(reader.result as string);
-        };
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
         reader.readAsDataURL(blob);
-      })
-      .catch(err => console.log("Avatar fetch failed", err));
-  }, [profile]);
+      });
+    },
+    enabled: !!profile?.administrative_info?.Code,
+    staleTime: 24 * 60 * 60 * 1000, // Cache for 24 hours
+    gcTime: 24 * 60 * 60 * 1000,
+  });
+
+  const avatarUri = avatarQuery.data;
 
   const getAbsenceCount = () => {
     if (absencesQuery.isLoading && !absencesQuery.data) return "--";
@@ -438,7 +449,7 @@ export default function HomeScreen() {
           <View style={styles.profileRow}>
             <View style={styles.avatarContainer}>
               {avatarUri ? (
-                <Image source={{ uri: avatarUri }} style={styles.avatar} />
+                <Image source={{ uri: avatarUri }} style={styles.avatar} contentFit="cover" cachePolicy="disk" />
               ) : (
                 <User size={40} color="#FFFFFF" />
               )}

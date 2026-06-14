@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
   KeyboardAvoidingView,
   Animated,
 } from "react-native";
-import { useTheme } from "@/themes/ThemeContext";
+import { useTheme, useFontScale } from "@/themes/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Stack } from "expo-router";
 import { schoolAppClient, secureStorage } from "@/api/client";
@@ -100,6 +100,9 @@ const ElementRow = ({ elem, theme, styles, updateMark, getStatusColor }: any) =>
 
 export default function CalculesScreen() {
   const { theme } = useTheme();
+  const scale = useFontScale();
+  const scaled = useCallback((n: number) => n * scale, [scale]);
+  const styles = useMemo(() => createStyles(theme, scaled), [theme, scaled]);
   const { profile, handleUnauthorized } = useAuth();
   const { lastPollTime, isPolling, poll } = usePolling();
   const netInfo = useNetInfo();
@@ -429,9 +432,16 @@ export default function CalculesScreen() {
   };
 
   const calculatedData = useMemo(() => {
-    const modules = modulesLookupQuery.data || {};
+    const modules = (modulesLookupQuery.data as any) || {};
     const currentResults = (currentElemsQuery.data as any[]) || [];
     const historyResults = (historyElemsQuery.data as any[]) || [];
+    
+    // 🔥 OPTIMIZATION: Use Maps for O(1) lookups instead of .find() in a loop
+    const resultsMap = new Map<string, any>();
+    // History first, then current (to let current overwrite history if duplicate)
+    for (const r of historyResults) { if (r.CodeElem) resultsMap.set(r.CodeElem, r); }
+    for (const r of currentResults) { if (r.CodeElem) resultsMap.set(r.CodeElem, r); }
+
     let totalPoints = 0;
     let totalCoef = 0;
 
@@ -439,7 +449,7 @@ export default function CalculesScreen() {
       let modSum = 0;
       let mCoefSum = 0;
       const elements = mData.elements?.map((elem: any) => {
-        const res = currentResults.find(r => r.CodeElem === elem.code) || historyResults.find(r => r.CodeElem === elem.code);
+        const res = resultsMap.get(elem.code);
         const u = userMarks[elem.code] || {};
         const cc = u.CC !== undefined ? u.CC : (res?.CC || "");
         const tp = u.TP !== undefined ? u.TP : (res?.TP || "");
@@ -494,38 +504,6 @@ export default function CalculesScreen() {
       Animated.timing(gpaAnim, { toValue: 1, duration: 150, useNativeDriver: true }),
     ]).start();
   }, [calculatedData.globalAvg, gpaAnim]);
-
-  const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.background },
-    scrollContent: { padding: 16, paddingBottom: 120 },
-    selectorCard: { backgroundColor: theme.surface, borderRadius: 24, padding: 16, marginBottom: 20, elevation: 2 },
-    selLabel: { fontSize: 11, fontWeight: '800', color: theme.muted, marginBottom: 8, textTransform: 'uppercase' },
-    chipRow: { flexDirection: 'row', marginBottom: 12 },
-    chip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 12, backgroundColor: theme.background, marginRight: 8, borderWidth: 1, borderColor: 'transparent' },
-    chipActive: { backgroundColor: theme.accent + '20', borderColor: theme.accent },
-    chipText: { fontSize: 12, fontWeight: '700', color: theme.muted },
-    chipActiveText: { color: theme.accent },
-    modCard: { backgroundColor: theme.surface, borderRadius: 24, marginBottom: 16, overflow: 'hidden', elevation: 2 },
-    modHeader: { padding: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    modTitle: { fontSize: 16, fontWeight: '700', color: theme.text, flex: 1 },
-    modAvgBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, marginLeft: 12 },
-    modAvgText: { fontSize: 14, fontWeight: '800' },
-    elemCard: { padding: 16, borderTopWidth: 1, borderTopColor: theme.background },
-    elemName: { fontSize: 15, fontWeight: '600', color: theme.text, marginBottom: 4 },
-    elemMeta: { fontSize: 11, color: theme.muted, marginBottom: 12 },
-    inputRow: { flexDirection: 'row', alignItems: 'center' },
-    inputBox: { flex: 1, marginRight: 10 },
-    inputLabel: { fontSize: 10, fontWeight: '800', color: theme.muted, marginBottom: 4, textAlign: 'center' },
-    input: { backgroundColor: theme.background, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 4, textAlign: 'center', fontSize: 16, fontWeight: '700', color: theme.text, borderWidth: 1, borderColor: theme.background },
-    elemAvgBox: { width: 45, alignItems: 'center', justifyContent: 'center' },
-    elemAvgText: { fontSize: 14, fontWeight: '800' },
-    footer: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 90, borderTopLeftRadius: 30, borderTopRightRadius: 30, overflow: 'hidden' },
-    footerContent: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24 },
-    footerLabel: { fontSize: 14, fontWeight: '600', color: theme.text },
-    footerValue: { fontSize: 32, fontWeight: '900', color: theme.accent },
-    empty: { padding: 40, alignItems: 'center' },
-    emptyText: { color: theme.muted, textAlign: 'center', marginTop: 12 }
-  });
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container}>
@@ -614,3 +592,36 @@ export default function CalculesScreen() {
     </KeyboardAvoidingView>
   );
 }
+
+const createStyles = (theme: any, scaled: (n: number) => number) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.background },
+    scrollContent: { padding: 16, paddingBottom: 120 },
+    selectorCard: { backgroundColor: theme.surface, borderRadius: 24, padding: 16, marginBottom: 20, elevation: 2 },
+    selLabel: { fontSize: 11, fontWeight: '800', color: theme.muted, marginBottom: 8, textTransform: 'uppercase' },
+    chipRow: { flexDirection: 'row', marginBottom: 12 },
+    chip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 12, backgroundColor: theme.background, marginRight: 8, borderWidth: 1, borderColor: 'transparent' },
+    chipActive: { backgroundColor: theme.accent + '20', borderColor: theme.accent },
+    chipText: { fontSize: 12, fontWeight: '700', color: theme.muted },
+    chipActiveText: { color: theme.accent },
+    modCard: { backgroundColor: theme.surface, borderRadius: 24, marginBottom: 16, overflow: 'hidden', elevation: 2 },
+    modHeader: { padding: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    modTitle: { fontSize: 16, fontWeight: '700', color: theme.text, flex: 1 },
+    modAvgBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, marginLeft: 12 },
+    modAvgText: { fontSize: 14, fontWeight: '800' },
+    elemCard: { padding: 16, borderTopWidth: 1, borderTopColor: theme.background },
+    elemName: { fontSize: 15, fontWeight: '600', color: theme.text, marginBottom: 4 },
+    elemMeta: { fontSize: 11, color: theme.muted, marginBottom: 12 },
+    inputRow: { flexDirection: 'row', alignItems: 'center' },
+    inputBox: { flex: 1, marginRight: 10 },
+    inputLabel: { fontSize: 10, fontWeight: '800', color: theme.muted, marginBottom: 4, textAlign: 'center' },
+    input: { backgroundColor: theme.background, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 4, textAlign: 'center', fontSize: 16, fontWeight: '700', color: theme.text, borderWidth: 1, borderColor: theme.background },
+    elemAvgBox: { width: 45, alignItems: 'center', justifyContent: 'center' },
+    elemAvgText: { fontSize: 14, fontWeight: '800' },
+    footer: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 90, borderTopLeftRadius: 30, borderTopRightRadius: 30, overflow: 'hidden' },
+    footerContent: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24 },
+    footerLabel: { fontSize: 14, fontWeight: '600', color: theme.text },
+    footerValue: { fontSize: 32, fontWeight: '900', color: theme.accent },
+    empty: { padding: 40, alignItems: 'center' },
+    emptyText: { color: theme.muted, textAlign: 'center', marginTop: 12 }
+  });

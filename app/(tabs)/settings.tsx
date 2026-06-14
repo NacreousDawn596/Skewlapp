@@ -34,7 +34,8 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 export default function SettingsScreen() {
   const { theme, setTheme, fontSize, setFontSize } = useTheme();
   const scale = useFontScale();
-  const scaled = (size: number) => size * scale;
+  const scaled = React.useCallback((size: number) => size * scale, [scale]);
+  const styles = React.useMemo(() => createStyles(theme, scaled), [theme, scaled]);
   const { logout } = useAuth();
   const { startPolling, stopPolling } = usePolling();
 
@@ -92,37 +93,6 @@ export default function SettingsScreen() {
     { value: "xl", label: "XL" },
   ];
 
-  const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.background },
-    scrollContent: { padding: 16 },
-    section: { marginBottom: 24 },
-    sectionTitle: { fontSize: scaled(13), fontWeight: "800", color: theme.muted, marginBottom: 12, marginTop: 8, textTransform: "uppercase", letterSpacing: 0.5 },
-    card: { backgroundColor: theme.surface, borderRadius: 20, overflow: "hidden", elevation: 2 },
-    settingItem: { flexDirection: "row", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: theme.background },
-    settingItemLast: { borderBottomWidth: 0 },
-    iconContainer: { width: scaled(40), height: scaled(40), borderRadius: 12, backgroundColor: theme.background, alignItems: "center", justifyContent: "center", marginRight: 12 },
-    settingContent: { flex: 1 },
-    settingTitle: { fontSize: scaled(16), fontWeight: "700", color: theme.text, marginBottom: 2 },
-    settingSubtitle: { fontSize: scaled(13), color: theme.muted },
-    themeGrid: { padding: 16, gap: 12 },
-    themeOption: { padding: 16, borderRadius: 12, borderWidth: 2, borderColor: "transparent" },
-    themeOptionSelected: { borderColor: theme.accent },
-    themeOptionName: { fontSize: scaled(15), fontWeight: "700", marginBottom: 8 },
-    themeOptionColors: { flexDirection: "row", gap: 6 },
-    colorSwatch: { width: 24, height: 24, borderRadius: 12 },
-    fontSizeGrid: { padding: 16, gap: 10, flexDirection: 'row', flexWrap: 'wrap' },
-    fontSizeOption: { paddingVertical: 12, paddingHorizontal: 16, borderRadius: 12, backgroundColor: theme.background, borderWidth: 2, borderColor: "transparent", flex: 1, minWidth: '45%', alignItems: 'center' },
-    fontSizeOptionSelected: { borderColor: theme.accent, backgroundColor: theme.accent + '10' },
-    fontSizeLabel: { fontSize: scaled(14), fontWeight: "700", color: theme.text },
-    intervalInput: { backgroundColor: theme.background, borderRadius: 10, padding: 8, fontSize: scaled(16), color: theme.text, width: 70, textAlign: "center", fontWeight: '700' },
-    logoutButton: { backgroundColor: "#FF6B6B", borderRadius: 16, padding: 18, flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 16 },
-    logoutButtonText: { fontSize: scaled(16), fontWeight: "800", color: "#FFFFFF", marginLeft: 8 },
-    creditsContainer: { marginTop: 32, alignItems: 'center', paddingBottom: 24 },
-    creditsText: { fontSize: scaled(13), color: theme.muted, fontWeight: '600' },
-    heartIcon: { marginHorizontal: 4 },
-    githubButton: { backgroundColor: theme.surface, borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', marginTop: 8, elevation: 1 },
-    githubText: { fontSize: scaled(15), fontWeight: '700', color: theme.text, marginLeft: 12, flex: 1 },
-  });
 
   return (
     <View style={styles.container}>
@@ -384,3 +354,126 @@ export default function SettingsScreen() {
     </View>
   );
 }
+
+const createStyles = (theme: any, scaled: (n: number) => number) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.background },
+    scrollContent: { padding: 16 },
+    section: { marginBottom: 24 },
+    sectionTitle: {
+      fontSize: scaled(13),
+      fontWeight: "800",
+      color: theme.muted,
+      marginBottom: 12,
+      marginTop: 8,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
+    card: {
+      backgroundColor: theme.surface,
+      borderRadius: 20,
+      overflow: "hidden",
+      elevation: 2,
+    },
+    settingItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: theme.background,
+    },
+    settingItemLast: { borderBottomWidth: 0 },
+    iconContainer: {
+      width: scaled(40),
+      height: scaled(40),
+      borderRadius: 12,
+      backgroundColor: theme.background,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 12,
+    },
+    settingContent: { flex: 1 },
+    settingTitle: {
+      fontSize: scaled(16),
+      fontWeight: "700",
+      color: theme.text,
+      marginBottom: 2,
+    },
+    settingSubtitle: { fontSize: scaled(13), color: theme.muted },
+    themeGrid: { padding: 16, gap: 12 },
+    themeOption: {
+      padding: 16,
+      borderRadius: 12,
+      borderWidth: 2,
+      borderColor: "transparent",
+    },
+    themeOptionSelected: { borderColor: theme.accent },
+    themeOptionName: { fontSize: scaled(15), fontWeight: "700", marginBottom: 8 },
+    themeOptionColors: { flexDirection: "row", gap: 6 },
+    colorSwatch: { width: 24, height: 24, borderRadius: 12 },
+    fontSizeGrid: { padding: 16, gap: 10, flexDirection: "row", flexWrap: "wrap" },
+    fontSizeOption: {
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 12,
+      backgroundColor: theme.background,
+      borderWidth: 2,
+      borderColor: "transparent",
+      flex: 1,
+      minWidth: "45%",
+      alignItems: "center",
+    },
+    fontSizeOptionSelected: {
+      borderColor: theme.accent,
+      backgroundColor: theme.accent + "10",
+    },
+    fontSizeLabel: {
+      fontSize: scaled(14),
+      fontWeight: "700",
+      color: theme.text,
+    },
+    intervalInput: {
+      backgroundColor: theme.background,
+      borderRadius: 10,
+      padding: 8,
+      fontSize: scaled(16),
+      color: theme.text,
+      width: 70,
+      textAlign: "center",
+      fontWeight: "700",
+    },
+    logoutButton: {
+      backgroundColor: "#FF6B6B",
+      borderRadius: 16,
+      padding: 18,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 16,
+    },
+    logoutButtonText: {
+      fontSize: scaled(16),
+      fontWeight: "800",
+      color: "#FFFFFF",
+      marginLeft: 8,
+    },
+    creditsContainer: { marginTop: 32, alignItems: "center", paddingBottom: 24 },
+    creditsText: { fontSize: scaled(13), color: theme.muted, fontWeight: "600" },
+    heartIcon: { marginHorizontal: 4 },
+    githubButton: {
+      backgroundColor: theme.surface,
+      borderRadius: 16,
+      padding: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 8,
+      elevation: 1,
+    },
+    githubText: {
+      fontSize: scaled(15),
+      fontWeight: "700",
+      color: theme.text,
+      marginLeft: 12,
+      flex: 1,
+    },
+  });

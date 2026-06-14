@@ -1,7 +1,7 @@
 import * as BackgroundFetch from "expo-background-fetch";
 import * as TaskManager from "expo-task-manager";
 import createContextHook from "@nkzw/create-context-hook";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import { useNetInfo } from "@react-native-community/netinfo";
 import * as Network from "expo-network";
@@ -92,15 +92,17 @@ export const [PollingProvider, usePolling] =
     const appState = useRef<AppStateStatus>(AppState.currentState);
 
     const hasStartedRef = useRef(false);
+    const isStartingRef = useRef(false);
     const wasOfflineRef = useRef(false);
 
     /* ---------------------------------------------------------------------- */
     /*                         NETWORK SOURCE OF TRUTH                         */
     /* ---------------------------------------------------------------------- */
 
-    const isNetworkReady =
-      netInfo.isConnected === true &&
-      netInfo.isInternetReachable === true;
+    const isNetworkReady = useMemo(
+      () => netInfo.isConnected === true && netInfo.isInternetReachable === true,
+      [netInfo.isConnected, netInfo.isInternetReachable]
+    );
 
     /* ---------------------------------------------------------------------- */
     /*                                POLLING                                  */
@@ -111,11 +113,14 @@ export const [PollingProvider, usePolling] =
         if (!isNetworkReady || !isAuthenticated) return;
 
         await runSinglePoll(async () => {
-          setIsPolling(true);
+          // Only show polling indicator if it's the first poll or not silent
+          if (!silent) setIsPolling(true);
           
           try {
-            await pollAllEndpoints(silent);
-            setLastPollTime(Date.now());
+            const hasChanges = await pollAllEndpoints(silent);
+            if (hasChanges || !lastPollTime) {
+              setLastPollTime(Date.now());
+            }
           } catch (e: any) {
             if (e.message === "UNAUTHORIZED") {
               console.warn("[Polling] Session expired during poll");
@@ -125,7 +130,7 @@ export const [PollingProvider, usePolling] =
               console.error("[Polling] Error:", e);
             }
           } finally {
-            setIsPolling(false);
+            if (!silent) setIsPolling(false);
           }
         });
       },
@@ -136,7 +141,7 @@ export const [PollingProvider, usePolling] =
     /*                         BACKGROUND TASK SETUP                            */
     /* ---------------------------------------------------------------------- */
 
-    const registerBackgroundTask = async () => {
+    const registerBackgroundTask = useCallback(async () => {
       const settings = await getPollingSettings();
       // On Android with unrestricted battery, we can try to push it
       // but BackgroundFetch itself is still limited by the OS to ~15m.
@@ -155,55 +160,71 @@ export const [PollingProvider, usePolling] =
       } catch (e) {
         console.error("[PollingContext] Registration failed:", e);
       }
-    };
+    }, []);
 
-    const unregisterBackgroundTask = async () => {
+    const unregisterBackgroundTask = useCallback(async () => {
       try {
         await BackgroundFetch.unregisterTaskAsync(BACKGROUND_POLL_TASK);
       } catch (e) {}
       await stopForegroundService();
-    };
+    }, []);
 
     /* ---------------------------------------------------------------------- */
     /*                           START / STOP POLLING                           */
     /* ---------------------------------------------------------------------- */
 
     const startPolling = useCallback(async () => {
-      if (hasStartedRef.current) return;
-      if (!isAuthenticated || !isNetworkReady) return;
-
-      let settings = await getPollingSettings();
-      if (settings.enabled === false) {
-        console.log("[PollingContext] Polling is disabled in settings");
+      if (isStartingRef.current || hasStartedRef.current) {
+        console.log("[PollingContext] Polling already active or starting, skipping start.");
         return;
       }
 
-      hasStartedRef.current = true;
+      isStartingRef.current = true;
+      try {
+        let settings = await getPollingSettings();
+        if (settings.enabled === false) {
+          console.log("[PollingContext] Polling is disabled in settings");
+          return;
+        }
 
-      await poll(false);
+        hasStartedRef.current = true;
 
-      settings = await getPollingSettings();
-      const intervalMs = settings.interval * 60 * 1000;
+        // Perform initial poll
+        await poll(false);
 
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      intervalRef.current = setInterval(() => {
-        poll(true);
-      }, intervalMs);
+        // 🔥 SELF-CORRECTING TIMEOUT PATTERN
+        // More resilient than setInterval when JS thread is busy
+        const scheduleNext = async () => {
+          if (!hasStartedRef.current) return;
+          
+          const settings = await getPollingSettings();
+          const delay = settings.interval * 60 * 1000;
+          
+          intervalRef.current = setTimeout(async () => {
+            await poll(true);
+            scheduleNext();
+          }, delay);
+        };
 
-      await registerBackgroundTask();
-    }, [poll, isAuthenticated, isNetworkReady]);
+        scheduleNext();
+
+        await registerBackgroundTask();
+      } finally {
+        isStartingRef.current = false;
+      }
+    }, [poll, isAuthenticated, isNetworkReady, registerBackgroundTask]);
 
     const stopPolling = useCallback(async () => {
       hasStartedRef.current = false;
 
       if (intervalRef.current) {
-        clearInterval(intervalRef.current);
+        clearTimeout(intervalRef.current as any);
         intervalRef.current = null;
       }
 
       setIsPolling(false);
       await unregisterBackgroundTask();
-    }, []);
+    }, [unregisterBackgroundTask]);
 
     /* ---------------------------------------------------------------------- */
     /*                         APP STATE (FOREGROUND)                           */
@@ -262,21 +283,34 @@ export const [PollingProvider, usePolling] =
 
       if (wasOfflineRef.current && netInfo.isInternetReachable === true) {
         wasOfflineRef.current = false;
-        resetFetchTimes();
         
-        if (isAuthenticated && isNetworkReady) {
-          poll(false);
-        }
+        console.log("[PollingContext] Network back online. Debouncing sync...");
+        
+        const timer = setTimeout(() => {
+           if (isAuthenticated && isNetworkReady) {
+            poll(true);
+          }
+        }, 3000); // Wait 3 seconds for connection to stabilize
+
+        return () => clearTimeout(timer);
       }
     }, [netInfo.isInternetReachable, poll, isAuthenticated, isNetworkReady]);
 
     /* ---------------------------------------------------------------------- */
 
-    return {
+    const contextValue = useMemo(() => ({
       isPolling,
       lastPollTime,
       startPolling,
       stopPolling,
       poll,
-    };
+    }), [
+      isPolling,
+      lastPollTime,
+      startPolling,
+      stopPolling,
+      poll,
+    ]);
+
+    return contextValue;
   });
