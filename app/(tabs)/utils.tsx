@@ -55,7 +55,6 @@ export default function UtilsScreen() {
   const [selSemestre, setSelSemestre] = useState("S1");
   const netInfo = useNetInfo();
 
-  // 🔥 NEW: Wrapped with auth error handler
   const filieresQuery = useQuery({
     queryKey: ["all_filieres"],
     queryFn: withReactQueryAuthHandler(
@@ -66,19 +65,18 @@ export default function UtilsScreen() {
     refetchOnReconnect: false,
   });
 
-  // 🔥 NEW: Wrapped with auth error handler
   const modulesLookupQuery = useQuery({
     queryKey: ["lookup_modules", selNiveau, selFiliere, selSemestre],
     queryFn: withReactQueryAuthHandler(
       async () => {
         const cacheKey = `${selNiveau}_${selFiliere}_${selSemestre}`;
         console.log(`[Utils] Loading modules for ${cacheKey}`);
-        
+
         try {
           console.log(`[Utils] Attempting fresh fetch for ${cacheKey}...`);
           const freshData = await schoolAppClient.getModules(selNiveau, selFiliere, selSemestre);
           const hasContent = freshData && ((Array.isArray(freshData) && freshData.length > 0) || (typeof freshData === 'object' && Object.keys(freshData).length > 0));
-          
+
           if (hasContent) {
             console.log(`[Utils] Got fresh data for ${cacheKey}`);
             if (!(netInfo.isInternetReachable === false)) {
@@ -92,16 +90,16 @@ export default function UtilsScreen() {
         } catch (e) {
           console.log(`[Utils] Fresh fetch failed for ${cacheKey}:`, e);
         }
-        
+
         console.log(`[Utils] Trying cache for ${cacheKey}...`);
         const cachedData = await getCachedModules(selNiveau, selFiliere, selSemestre);
         const hasCachedContent = cachedData && ((Array.isArray(cachedData) && cachedData.length > 0) || (typeof cachedData === 'object' && Object.keys(cachedData).length > 0));
-        
+
         if (hasCachedContent) {
           console.log(`[Utils] Using cached data for ${cacheKey}`);
           return cachedData;
         }
-        
+
         console.log(`[Utils] No valid data found for ${cacheKey}`);
         throw new Error("No data available (offline)");
       },
@@ -115,7 +113,6 @@ export default function UtilsScreen() {
     refetchOnReconnect: true,
   });
 
-  // 🔥 NEW: Wrapped with auth error handler
   const platformStatusQuery = useQuery({
     queryKey: ["platform_status"],
     queryFn: withReactQueryAuthHandler(

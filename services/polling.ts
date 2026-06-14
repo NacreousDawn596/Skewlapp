@@ -132,7 +132,6 @@ const fetchMap: Record<PollEndpoint, () => Promise<any>> = {
 };
 
 /**
- * 🔥 NEW: Foreground Service Keep-Alive
  * Uses expo-location to start a persistent process on Android
  */
 let isForegroundServiceRunning = false;
@@ -149,7 +148,7 @@ export const startForegroundService = async () => {
 
     await Location.startLocationUpdatesAsync(KEEP_ALIVE_TASK, {
       accuracy: Location.Accuracy.Balanced,
-      distanceInterval: 1000, 
+      distanceInterval: 1000,
       deferredUpdatesInterval: 60000,
       foregroundService: {
         notificationTitle: "SkewlApp est actif",
@@ -179,19 +178,18 @@ export const stopForegroundService = async () => {
 };
 
 /**
- * 🔥 NEW: Optimized polling for background
  * Only polls essential data to save battery
  */
 export const pollEssentialEndpoints = async (silent: boolean = true): Promise<void> => {
-    const settings = await getPollingSettings();
-    if (settings.enabled === false) return;
-    
-    // In background, we only care about real-time events
-    const essential = ["currentElems", "absences"] as const;
+  const settings = await getPollingSettings();
+  if (settings.enabled === false) return;
 
-    await Promise.all(
-        essential.map((endpoint) => pollEndpoint(endpoint, settings, silent))
-    );
+  // In background, we only care about real-time events
+  const essential = ["currentElems", "absences"] as const;
+
+  await Promise.all(
+    essential.map((endpoint) => pollEndpoint(endpoint, settings, silent))
+  );
 };
 
 
@@ -228,7 +226,6 @@ const shouldFetchEndpoint = (
 };
 
 /**
- * 🔥 NEW: Poll a single endpoint with proper UNAUTHORIZED propagation
  * Throws UNAUTHORIZED if auth fails - caller must handle
  */
 export const pollEndpoint = async (
@@ -258,9 +255,8 @@ export const pollEndpoint = async (
     return false;
   }
 
-  // 🔥 NEW: Let UNAUTHORIZED propagate - don't catch it here
   const freshData = await fetchData();
-  
+
   if (!freshData) {
     console.warn(`[Polling] No data returned for ${endpoint}. Possible network/session error.`);
     return false;
@@ -286,7 +282,7 @@ export const pollEndpoint = async (
   } else {
     const oldItemsCount = Array.isArray(oldData) ? oldData.length : Object.keys(oldData).length;
     const newItemsCount = Array.isArray(newData) ? newData.length : Object.keys(newData).length;
-    
+
     if (oldItemsCount !== newItemsCount) {
       dataChanged = true;
     } else {
@@ -330,7 +326,6 @@ export const pollEndpoint = async (
 };
 
 /**
- * 🔥 NEW: Poll all endpoints with proper UNAUTHORIZED propagation
  * Throws UNAUTHORIZED if any endpoint fails auth
  * @returns true if any data changed
  */
@@ -342,7 +337,7 @@ export const pollAllEndpoints = async (silent: boolean = false): Promise<boolean
   // The caller (PollingContext) must catch and handle it
 
   const regularEndpoints = ["currentElems", "currentMods", "absences"] as const;
-  
+
   let anyChanged = false;
   const results: boolean[] = [];
 
@@ -352,7 +347,7 @@ export const pollAllEndpoints = async (silent: boolean = false): Promise<boolean
     const changed = await pollEndpoint(endpoint, settings, silent);
     results.push(changed);
     if (changed) anyChanged = true;
-    
+
     // Give the JS thread a tiny 30ms breather to process UI events (like scroll/back)
     await new Promise(resolve => setTimeout(resolve, 30));
   }

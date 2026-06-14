@@ -52,9 +52,8 @@ export const [AuthProvider, useAuth] =
               if (success) {
                 const profileData =
                   (await schoolAppClient.getProfile()) as UserProfile | null;
-                
+
                 if (profileData) {
-                  // 🔥 NEW: Extract session ID from cookie jar for photo fetching
                   const cookies = await ((schoolAppClient as any).httpClient.cookieJar as any).get((schoolAppClient as any).baseUrl);
                   const sessionIdMatch = cookies.match(/JSESSIONID=([^;]+)/);
                   if (sessionIdMatch) {
@@ -76,8 +75,6 @@ export const [AuthProvider, useAuth] =
                 }
               }
             } catch (e: any) {
-              // ⚠️ NEW: Don't auto-logout on startup errors
-              // Let the user stay "logged in" with cached data
               console.error("[AuthContext] Auto-login failed:", e);
             }
           }
@@ -139,7 +136,6 @@ export const [AuthProvider, useAuth] =
           throw new Error("Login succeeded but profile fetch failed.");
         }
 
-        // 🔥 NEW: Extract session ID from cookie jar for photo fetching
         const cookies = await ((schoolAppClient as any).httpClient.cookieJar as any).get((schoolAppClient as any).baseUrl);
         const sessionIdMatch = cookies.match(/JSESSIONID=([^;]+)/);
         if (sessionIdMatch) {
@@ -215,7 +211,6 @@ export const [AuthProvider, useAuth] =
           return false;
         }
 
-        // 🔥 NEW: Extract session ID from cookie jar for photo fetching
         const cookies = await ((schoolAppClient as any).httpClient.cookieJar as any).get((schoolAppClient as any).baseUrl);
         const sessionIdMatch = cookies.match(/JSESSIONID=([^;]+)/);
         if (sessionIdMatch) {
