@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { useTheme } from "@/themes/ThemeContext";
-import { Stack } from "expo-router";
+import { Stack, useLocalSearchParams } from "expo-router";
 import { schoolAppClient } from "@/api/client";
 import {
   ChevronRight,
@@ -87,8 +87,21 @@ const SanctionItem = ({ item, theme, styles }: any) => (
 export default function AbsencesScreen() {
   const { theme } = useTheme();
   const { profile, handleUnauthorized } = useAuth();
-  const [activeTab, setActiveTab] = useState<Tab>("absences");
+  const params = useLocalSearchParams();
+  const [activeTab, setActiveTab] = useState<Tab>((params.tab as Tab) || "absences");
   const { lastPollTime, isPolling, poll } = usePolling();
+
+  useEffect(() => {
+    if (params.tab && (params.tab === "absences" || params.tab === "sanctions")) {
+        setActiveTab(params.tab as Tab);
+    }
+  }, [params.tab]);
+
+  useEffect(() => {
+    if (!lastPollTime) return;
+    void absencesQuery.refetch();
+    void sanctionsQuery.refetch();
+  }, [lastPollTime]);
 
   const absencesQuery = useQuery({
     queryKey: ["absences_data"],
@@ -127,9 +140,23 @@ export default function AbsencesScreen() {
 
   const getSemesterFromCode = (code: string): string => {
     if (!code) return "S1";
-    const reversed = code.split("").reverse();
-    const digit = reversed.length >= 3 ? reversed[2] : reversed[1];
-    return `S${digit}`;
+    // If it already has S followed by digits (e.g. S7), use that
+    const sMatch = code.match(/S(\d+)/i);
+    if (sMatch) return `S${sMatch[1]}`;
+    
+    // Fallback: extract the first digit that looks like a semester (1-9)
+    // Most codes are like M3101 where the 2nd digit or 3rd digit is the semester
+    const digitMatch = code.match(/\d/);
+    if (digitMatch) {
+       // If the code is like M3101, it's usually S3 or S4 (for year 2)
+       // But wait, the standard ENAM codes use the first digit for year and second for semester?
+       // Let's try the logic from notes.tsx but more robust
+       const reversed = code.split("").reverse();
+       const digit = reversed.length >= 3 ? reversed[2] : reversed[1];
+       if (code.endsWith("10")) return "S10";
+       return `S${digit}`;
+    }
+    return "S1";
   };
 
   const getDisplayName = (item: any, mappedName?: string) => {
@@ -159,49 +186,62 @@ export default function AbsencesScreen() {
     queryKey: ["absence_name_mappings", profile?.administrative_info],
     queryFn: withReactQueryAuthHandler(
       async () => {
-        const cachedNames = await getCachedElementNames();
-        const mapping: Record<string, string> = { ...cachedNames };
+        try {
+          const cachedNames = await getCachedElementNames();
+          const mapping: Record<string, string> = { ...cachedNames };
 
-        const absences = (absencesQuery.data as any)?.details || [];
-        const sanctions = Array.isArray(sanctionsQuery.data) ? sanctionsQuery.data : ((sanctionsQuery.data as any)?.details || []);
-        if (!profile?.administrative_info) return {};
-        const targets = new Set<string>();
-        [...absences, ...sanctions].forEach(item => {
-          const code = item.Element || item.Module || item.Type;
-          if (code && code.length >= 4) {
-            const S = getSemesterFromCode(code);
-            const N = getNiveauFromSemestre(S);
-            const admin = profile.administrative_info;
-            const F = admin.Filière || admin.Filiere;
-            if (N && F && S) targets.add(`${N}|${F}|${S}`);
-          }
-        });
-        await Promise.all([...targets].map(async (target) => {
-          const [N, F, S] = target.split("|");
-          try {
-            const modulesObj = await schoolAppClient.getModules(N, F, S);
-            if (modulesObj && typeof modulesObj === 'object') {
-              Object.entries(modulesObj).forEach(([modCode, modData]: [string, any]) => {
-                const moduleName = modData.intitule || modData.Intitule || modData.name || modData.Name;
-                if (moduleName) {
-                  mapping[modCode] = moduleName;
-                }
-                if (Array.isArray(modData.elements)) {
-                  modData.elements.forEach((elem: any) => {
-                    const elementName = elem.intitule || elem.Intitule || elem.name || elem.Name;
-                    if (elem.code && elementName) mapping[elem.code] = elementName;
-                  });
-                }
-              });
+          const absences = (absencesQuery.data as any)?.details || [];
+          const sanctionsData = sanctionsQuery.data as any;
+          const sanctions = Array.isArray(sanctionsData) ? sanctionsData : (sanctionsData?.details || []);
+          
+          if (!profile?.administrative_info) return mapping;
+
+          const targets = new Set<string>();
+          [...absences, ...sanctions].forEach(item => {
+            if (!item) return;
+            const code = item.Element || item.Module || item.Type;
+            if (code && typeof code === 'string' && code.length >= 3) {
+              const S = getSemesterFromCode(code);
+              const N = getNiveauFromSemestre(S);
+              const admin = profile.administrative_info;
+              const F = admin.Filière || admin.Filiere;
+              if (N && F && S && !N.includes("NaN")) targets.add(`${N}|${F}|${S}`);
             }
-          } catch (e) { }
-        }));
-        
-        if (Object.keys(mapping).length > 0) {
-          await setCachedElementNames(mapping);
-        }
+          });
 
-        return mapping;
+          await Promise.all([...targets].map(async (target) => {
+            const [N, F, S] = target.split("|");
+            try {
+              const modulesObj = await schoolAppClient.getModules(N, F, S);
+              if (modulesObj && typeof modulesObj === 'object') {
+                Object.entries(modulesObj).forEach(([modCode, modData]: [string, any]) => {
+                  if (!modData) return;
+                  const moduleName = modData.intitule || modData.Intitule || modData.name || modData.Name;
+                  if (moduleName) mapping[modCode] = moduleName;
+                  
+                  if (modData.elements && Array.isArray(modData.elements)) {
+                    modData.elements.forEach((elem: any) => {
+                      if (!elem) return;
+                      const elementName = elem.intitule || elem.Intitule || elem.name || elem.Name;
+                      if (elem.code && elementName) mapping[elem.code] = elementName;
+                    });
+                  }
+                });
+              }
+            } catch (e) {
+                console.warn(`[Absences] Failed to fetch modules for ${target}:`, e);
+            }
+          }));
+          
+          if (Object.keys(mapping).length > 0) {
+            await setCachedElementNames(mapping);
+          }
+
+          return mapping;
+        } catch (error) {
+          console.error("[Absences] Error in moduleMappings query:", error);
+          return {};
+        }
       },
       handleUnauthorized
     ),
@@ -242,13 +282,13 @@ export default function AbsencesScreen() {
         <View style={styles.tabs}>
           <TouchableOpacity
             style={[styles.tab, activeTab === "absences" && styles.activeTab]}
-            onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setActiveTab("absences"); }}
+            onPress={() => { setActiveTab("absences"); }}
           >
             <Text style={[styles.tabText, activeTab === "absences" && styles.activeTabText]}>ABSENCES</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tab, activeTab === "sanctions" && styles.activeTab]}
-            onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setActiveTab("sanctions"); }}
+            onPress={() => { setActiveTab("sanctions"); }}
           >
             <Text style={[styles.tabText, activeTab === "sanctions" && styles.activeTabText]}>SANCTIONS</Text>
           </TouchableOpacity>
@@ -259,7 +299,7 @@ export default function AbsencesScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
-            refreshing={false}
+            refreshing={isPolling}
             onRefresh={() => poll(false)}
             tintColor={theme.accent}
           />

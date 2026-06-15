@@ -1,180 +1,71 @@
-<div align="center">
-  <img src="https://github.com/NacreousDawn596/Skewlapp/blob/main/assets/images/icon.png?raw=true" alt="SkewlApp Logo" width="120" />
-  <h1>🎓 SkewlApp</h1>
-  <p>
-    <b>A sleek, fast, and reliable mobile app for ENSAM students to track their academic life in real-time.</b>
-  </p>
-  <p>
-    <a href="https://github.com/NacreousDawn596/Skewlapp/releases/latest"><img src="https://img.shields.io/github/v/release/NacreousDawn596/Skewlapp?style=for-the-badge&logo=github&color=8A2BE2" alt="Latest Release" /></a>
-    <a href="https://github.com/NacreousDawn596/Skewlapp/blob/main/LICENSE"><img src="https://img.shields.io/github/license/NacreousDawn596/Skewlapp?style=for-the-badge&color=blue" alt="License" /></a>
-    <a href="https://github.com/NacreousDawn596/Skewlapp/issues"><img src="https://img.shields.io/github/issues/NacreousDawn596/Skewlapp?style=for-the-badge&logo=github&color=green" alt="Issues" /></a>
-  </p>
-</div>
+# SkewlApp
+
+SkewlApp is a professional, feature-rich mobile application designed for students to interact with the SchoolApp platform. It provides real-time access to grades, attendance, academic history, and a powerful grade simulator, all with robust offline support and background notifications.
+
+## 🚀 Key Features
+
+### 1. **Live Dashboard & Activity Feed**
+- **Quick Stats:** Instant view of total absences, active sanctions, and school documents.
+- **Activity Feed:** A reverse-chronological list of all recent updates (new grades, attendance changes, etc.).
+- **Smart Avatar:** Automatically fetches and caches your official student photo.
+
+### 2. **Comprehensive Notes & Grades**
+- **Multi-Category Views:** Browse through current semester elements/modules or view your entire academic history.
+- **Detailed Stats:** Click on any grade to view class statistics (Min, Max, Average, and your rank).
+- **Initialization Detection:** Notifies you immediately when a grade is first assigned (null → value).
+
+### 3. **Grade Simulator (Simulateur)**
+- **Intelligent Prediction:** Estimate your semester and module averages before official results are out.
+- **Baseline Sync:** Automatically imports your existing grades from the portal as a starting point.
+- **Custom Overrides:** Manually enter potential marks for CC, TP, and EX to see how they impact your overall GPA.
+
+### 4. **Absences & Sanctions**
+- **Real-time Tracking:** Track every recorded absence with status (Justified/Unjustified).
+- **Official Status:** View your current administrative standing and any official sanctions.
+
+### 5. **Background Sync & Notifications**
+- **Intelligent Polling:** Periodically checks for updates in the background (even when the app is closed).
+- **Smart Deduplication:** Advanced logic ensures you never receive duplicate notifications for the same update.
+- **Offline First:** All data is locally cached, providing a snappy experience even without an internet connection.
 
 ---
 
-**SkewlApp** is a feature-rich mobile application built with **React Native (Expo)** that empowers students at ENSAM to effortlessly monitor their academic progress. From notes and absences to module calculations, SkewlApp provides a modern, intuitive, and high-performance experience.
+## 🛠 Developer & Testing Tools
 
-## 📜 Table of Contents
-- [✨ Features](#-features)
-- [🎨 Themes](#-themes)
-- [🏗️ Tech Stack](#️-tech-stack)
-- [📁 Project Structure](#-project-structure)
-- [🚀 Getting Started](#-getting-started)
-- [📲 Build & Deployment](#-build--deployment)
-- [🤝 Contributing](#-contributing)
-- [🔒 Security Notes](#-security-notes)
-- [🎯 Vision](#-vision)
-- [📜 License](#-license)
+### **Ultimate Realism Mock Server**
+Located in `./mockServer`, this ExpressJS-based backend provides a 100% complete simulation of the SchoolApp platform.
+- **HTML Table Generation:** Mimics the exact HTML structure of the school portal to test real parsing logic.
+- **Session & CSRF Management:** Simulates cookie-based auth and security tokens.
+- **State Persistence:** Local `db.json` stores all your test scenarios.
 
----
-
-## ✨ Features
-
-### 🔐 Authentication
-- **Secure Login:** robust authentication using student credentials.
-- **Persistent Sessions:** Stay logged in with secure, session-based authentication (JSESSIONID).
-- **Auto-Refresh:** Automatic session renewal ensures you're always connected.
-
-### 🏠 Home
-- **Student Dashboard:** A comprehensive overview of your academic profile.
-- **Authenticated Data:** Securely fetches and displays your profile picture and academic information.
-
-### 📘 Notes & Results
-- **Structured Views:** Explore your academic results with organized sections for modules, elements, semesters, and years.
-- **Real-Time Updates:** Data is automatically refreshed and cached for quick access.
-
-### 🚫 Absences & Sanctions
-- **Track Attendance:** View detailed records of absences and sanctions.
-- **Instant Notifications:** Receive real-time alerts for new records.
-
-### 🧮 Real-Time Grade Calculator
-- **Interactive Calculator:** A powerful tool to calculate element, module, and overall averages.
-- **Persistent & Editable:** Your calculations are saved locally and can be modified anytime.
-
-### ⚙️ Settings
-- **Customization:** Personalize your experience with over 15 premium themes, adjustable font sizes, and configurable polling intervals.
-- **Account Management:** Easily log out and clear all cached data.
-
-### 🔔 Real-Time Notifications
-- **Stay Informed:** SkewlApp periodically checks for updates to your notes, absences, and sanctions, sending local notifications to keep you informed.
+### **Hidden Developer Mode**
+Reveal the hidden developer settings to switch between Production and Mock environments at runtime.
+- **How to unlock:** Tap the **"Paramètres"** title in the settings tab **7 times**.
+- **Features:** Instantly redirect app traffic to a local IP and clear cache for fresh testing.
 
 ---
 
-## 🎨 Themes
+## 📝 Recent Changelog (v5.1.0)
 
-SkewlApp offers over **15 handcrafted themes**, allowing you to personalize your experience. Choose from deep dark modes, professional neutral palettes, and soft light themes.
+- **FIX:** Refactored grade detection to handle commas (e.g., `15,50`) correctly.
+- **FIX:** Explicitly handles "Grade Initialization" (transition from no grade to a value).
+- **FIX:** Implemented two-layer deduplication to prevent double notifications.
+- **FIX:** Added `useEffect` sync hooks to ensure UI refreshes immediately after background polls.
+- **NEW:** Added "Pull-to-Refresh" to the Grade Simulator.
+- **NEW:** Integrated the **Ultimate Realism Mock Server** for sandbox testing.
+- **NEW:** Added hidden **Developer Mode** with host-switching capabilities.
+- **IMPROVED:** Localized all system notifications to French.
 
 ---
 
-## 🏗️ Tech Stack
-
+## 📦 Technical Stack
 - **Framework:** React Native (Expo)
 - **Language:** TypeScript
-- **Routing:** Expo Router
-- **State Management:** React Context API & Hooks
-- **API Client:** Axios
-- **Storage:** Expo SecureStore
-- **Notifications:** Expo Notifications
+- **Data:** React Query + Zustand
+- **Parsing:** Cheerio (for HTML extraction)
+- **API:** Custom `schoolapp` package
 
 ---
 
-## 📁 Project Structure
-
-```
-src/
-├── api/            # API client and helpers
-├── app/            # Screens & routes (Expo Router)
-├── assets/         # Images and icons
-├── contexts/       # Auth & polling contexts
-├── services/       # Notifications, polling logic
-├── themes/         # Theme palettes & provider
-├── types/          # TypeScript types
-└── utils/          # Helpers & calculations
-```
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Node.js (LTS version recommended)
-- Git
-- Expo Go app on your [Android](https://play.google.com/store/apps/details?id=host.exp.exponent) or [iOS](https://apps.apple.com/us/app/expo-go/id982107779) device.
-
-### Installation
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/NacreousDawn596/Skewlapp.git
-   cd Skewlapp
-   ```
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-3. **Start the development server:**
-   ```bash
-   npx expo start
-   ```
-4. **Scan the QR code** with the Expo Go app to launch SkewlApp on your device.
-
-> ⚠️ For full functionality, it is highly recommended to run the app on a physical **Android or iOS** device, not on a web browser.
-
----
-
-## 📲 Build & Deployment
-
-To create a standalone build of the app, you can use **Expo Application Services (EAS)**.
-
-### Build for Android
-```bash
-# Build a production-ready APK/AAB
-eas build -p android --profile production
-```
-
-### Build for iOS
-```bash
-# Build for iOS (requires a paid Apple Developer account)
-eas build -p ios --profile production
-```
-
-For more details, refer to the [official EAS Build documentation](https://docs.expo.dev/build/introduction/).
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! If you have ideas for new features, improvements, or bug fixes, please follow these steps:
-
-1. **Fork the repository.**
-2. **Create a new branch:** `git checkout -b feature/your-feature-name`
-3. **Make your changes** and commit them with a clear message.
-4. **Push your branch** and open a **Pull Request**.
-
----
-
-## 🔒 Security Notes
-
-- All credentials and session data are stored securely on your device.
-- Authenticated resources are fetched over HTTPS.
-- User-entered calculator data remains local to the device.
-
----
-
-## 🎯 Vision
-
-SkewlApp aims to be a **trusted academic companion** that is fast, clean, and frustration-free—something students actually enjoy using.
-
-*Built by students, for students.*
-
----
-
-## 📜 License
-
-This project is licensed under the **MIT License**. See the [LICENSE](https://github.com/NacreousDawn596/Skewlapp/blob/main/LICENSE) file for details.
-
----
-
-<div align="center">
-  <p>Made with ❤️, lack of sleep, and a lot of coffee by <a href="https://github.com/NacreousDawn596">Aferiad Kamal</a></p>
-</div>
+## 👨‍💻 Credits
+Developed with passion (and lots of caffeine) by **Aferiad Kamal** & **Feddoul Salma**.

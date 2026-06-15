@@ -13,24 +13,17 @@ export const detectChanges = (
     const activities: ActivityItem[] = [];
 
     const getVal = (item: any) => {
-        const v = item.note ?? item.Moy ?? item.Note ?? item.Moyenne ?? item["Moy SEM"] ?? item["Moy Annee"];
-        if (v === null || v === undefined || v === "" || v === "--") return null;
-        return typeof v === 'string' ? parseFloat(v) : v;
+        const v = item.note ?? item.Moy ?? item.Note ?? item.Moyenne ?? item["Moy SEM"] ?? item["Moy Année"] ?? item["Moy Annee"];
+        if (v === null || v === undefined || v === "" || v === "--" || v === "null") return null;
+        
+        const parsed = typeof v === 'string' ? parseFloat(v.replace(',', '.')) : v;
+        if (typeof parsed === 'number' && !isNaN(parsed)) return parsed;
+        
+        return v;
     };
 
     if (endpoint === "currentElems" || endpoint === "allElems" || endpoint === "currentMods" || endpoint === "allMods") {
         if (Array.isArray(oldData) && Array.isArray(newData)) {
-            if (newData.length > oldData.length) {
-                activities.push({
-                    id: "",
-                    timestamp: 0,
-                    type: "note",
-                    title: endpoint.includes("Elem") ? "New Element Added" : "New Module Added",
-                    description: `${newData.length - oldData.length} new items detected`,
-                    route: "/notes",
-                });
-            }
-
             // Optimize: Create a map for O(1) lookups
             const oldMap = new Map<string, any>();
             for (const item of oldData) {
@@ -44,18 +37,35 @@ export const detectChanges = (
 
                 const oldItem = oldMap.get(itemKey);
 
-                const oldVal = getVal(oldItem || {});
                 const newVal = getVal(newItem);
+                const oldVal = getVal(oldItem || {});
 
-                if (oldItem && oldVal !== newVal) {
-                    const itemName = (newItem as any).Intitule || itemKey;
+                const itemName = (newItem as any).Intitule || (newItem as any).Intitulé || (newItem as any).name || itemKey;
+                const newStr = (newItem as any).note ?? (newItem as any).Moy ?? (newItem as any).Note ?? (newItem as any).Moyenne ?? (newItem as any)["Moy SEM"] ?? (newItem as any)["Moy Année"] ?? (newItem as any)["Moy Annee"] ?? "--";
+
+                if (!oldItem) {
+                    // NEW ITEM added to the list
+                    const isGraded = newVal !== null;
+                    activities.push({
+                        id: "",
+                        timestamp: 0,
+                        type: "note",
+                        title: isGraded ? `Note initialisée: ${itemName}` : `Nouvel élément: ${itemName}`,
+                        description: isGraded ? `Note: ${newStr}` : "Élément ajouté au relevé",
+                        route: "/notes",
+                    });
+                } else if (oldVal !== newVal) {
+                    // EXISTING ITEM changed (including initialization: null -> value)
+                    const oldStr = (oldItem as any).note ?? (oldItem as any).Moy ?? (oldItem as any).Note ?? (oldItem as any).Moyenne ?? (oldItem as any)["Moy SEM"] ?? (oldItem as any)["Moy Année"] ?? (oldItem as any)["Moy Annee"] ?? "--";
+                    
+                    const isInitialization = oldVal === null && newVal !== null;
 
                     activities.push({
                         id: "",
                         timestamp: 0,
                         type: "note",
-                        title: `Grade Updated: ${itemName}`,
-                        description: `${oldVal ?? "N/A"} → ${newVal ?? "N/A"}`,
+                        title: isInitialization ? `Note initialisée: ${itemName}` : `Note mise à jour: ${itemName}`,
+                        description: isInitialization ? `Note: ${newStr}` : `${oldStr} → ${newStr}`,
                         route: "/notes",
                     });
                 }

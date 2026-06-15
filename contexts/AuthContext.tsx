@@ -1,11 +1,14 @@
+import { AppState, AppStateStatus } from "react-native";
 import createContextHook from "@nkzw/create-context-hook";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import NetInfo from "@react-native-community/netinfo";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useEffect, useRef } from "react";
+import * as LocalAuthentication from 'expo-local-authentication';
 
 import { apiClient, schoolAppClient, secureStorage } from "../api/client";
 import { clearAllCache } from "../services/cache";
 import { UserProfile } from "../types/api";
+import { getPollingSettings } from "../services/polling";
 
 interface AuthContextValue {
   isAuthenticated: boolean;
@@ -17,6 +20,13 @@ interface AuthContextValue {
   loginError: string | null;
   isLoggingIn: boolean;
   hasAttemptedAutoLogin: boolean;
+  isLocked: boolean;
+  setIsLocked: (locked: boolean) => void;
+  unlock: () => Promise<boolean>;
+  isGradePrivacyEnabled: boolean;
+  setIsGradePrivacyEnabled: (enabled: boolean) => void;
+  isBiometricLockEnabled: boolean;
+  setIsBiometricLockEnabled: (enabled: boolean) => void;
 }
 
 const PROFILE_KEY = "profile";
@@ -26,6 +36,81 @@ export const [AuthProvider, useAuth] =
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loginError, setLoginError] = useState<string | null>(null);
+    const [isLocked, setIsLocked] = useState(false);
+    const [isGradePrivacyEnabled, setIsGradePrivacyEnabled] = useState(false);
+    const [isBiometricLockEnabled, setIsBiometricLockEnabled] = useState(false);
+    
+    const appState = useRef(AppState.currentState);
+    const isAuthenticating = useRef(false);
+
+    // Initial check for lock and privacy settings
+    useEffect(() => {
+      const initSettings = async () => {
+        const settings = await getPollingSettings();
+        setIsBiometricLockEnabled(settings.biometricLock);
+        setIsGradePrivacyEnabled(settings.gradePrivacy);
+        
+        // If biometric lock is enabled, start as locked
+        if (settings.biometricLock) {
+            setIsLocked(true);
+        }
+      };
+      initSettings();
+    }, []);
+
+    // AppState listener for background locking
+    useEffect(() => {
+        const subscription = AppState.addEventListener("change", (nextAppState: AppStateStatus) => {
+            if (
+                appState.current.match(/active/) &&
+                nextAppState.match(/inactive|background/)
+            ) {
+                // If biometric lock is enabled, lock the app when going to background
+                if (isBiometricLockEnabled && !isLocked) {
+                    console.log("[AuthContext] App backgrounded, locking...");
+                    setIsLocked(true);
+                }
+            }
+            appState.current = nextAppState;
+        });
+
+        return () => {
+            subscription.remove();
+        };
+    }, [isBiometricLockEnabled]);
+
+    const unlock = useCallback(async () => {
+        if (isAuthenticating.current) return false;
+        
+        try {
+            isAuthenticating.current = true;
+            const hasHardware = await LocalAuthentication.hasHardwareAsync();
+            const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+            
+            if (!hasHardware || !isEnrolled) {
+                setIsLocked(false);
+                isAuthenticating.current = false;
+                return true;
+            }
+
+            const result = await LocalAuthentication.authenticateAsync({
+                promptMessage: 'Authentification requise',
+                fallbackLabel: 'Utiliser le code',
+                disableDeviceFallback: false,
+            });
+
+            isAuthenticating.current = false;
+            if (result.success) {
+                setIsLocked(false);
+                return true;
+            }
+            return false;
+        } catch (e) {
+            isAuthenticating.current = false;
+            console.error('[Auth] Unlock failed:', e);
+            return false;
+        }
+    }, [isLocked]);
 
     /**
      * AUTH CHECK (startup)
@@ -270,6 +355,13 @@ export const [AuthProvider, useAuth] =
       isLoggingIn: loginMutation.isPending,
       hasAttemptedAutoLogin:
         checkAuthQuery.data?.autoLoginAttempted ?? false,
+      isLocked,
+      setIsLocked,
+      unlock,
+      isGradePrivacyEnabled,
+      setIsGradePrivacyEnabled,
+      isBiometricLockEnabled,
+      setIsBiometricLockEnabled,
     }), [
       isAuthenticated,
       profile,
@@ -279,6 +371,13 @@ export const [AuthProvider, useAuth] =
       logoutMutation,
       handleUnauthorized,
       loginError,
+      isLocked,
+      setIsLocked,
+      unlock,
+      isGradePrivacyEnabled,
+      setIsGradePrivacyEnabled,
+      isBiometricLockEnabled,
+      setIsBiometricLockEnabled,
     ]);
 
     return contextValue;

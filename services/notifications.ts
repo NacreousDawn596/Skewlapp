@@ -39,12 +39,36 @@ export const requestNotificationPermissions = async (): Promise<boolean> => {
   return true;
 };
 
+// In-memory cache to prevent duplicate notifications within a short window (e.g., 10 seconds)
+const sentNotificationsCache = new Map<string, number>();
+const DEDUPLICATION_WINDOW_MS = 10000;
+
 export const scheduleNotification = async (
   title: string,
   body: string,
   data?: Record<string, unknown>
 ): Promise<void> => {
   try {
+    const now = Date.now();
+    const hash = `${title}|${body}`;
+
+    // Deduplication check
+    const lastSent = sentNotificationsCache.get(hash);
+    if (lastSent && now - lastSent < DEDUPLICATION_WINDOW_MS) {
+        console.log(`[Notifications] Deduplicating identical notification: ${title}`);
+        return;
+    }
+    sentNotificationsCache.set(hash, now);
+
+    // Cleanup old cache entries periodically
+    if (sentNotificationsCache.size > 50) {
+        for (const [key, timestamp] of sentNotificationsCache.entries()) {
+            if (now - timestamp > DEDUPLICATION_WINDOW_MS) {
+                sentNotificationsCache.delete(key);
+            }
+        }
+    }
+
     await Notifications.scheduleNotificationAsync({
       content: {
         title,

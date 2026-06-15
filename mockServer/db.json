@@ -1,0 +1,75 @@
+{
+  "profile": {
+    "full_name": "Mock Student",
+    "code": "20260001",
+    "filiere": "Génie Informatique",
+    "niveau": "4A"
+  },
+  "currentElems": [
+    {
+      "code": "INFO401_1",
+      "name": "Algorithmique",
+      "cc": "20",
+      "ex": "20",
+      "moy": "20"
+    },
+    {
+      "code": "INFO402_1",
+      "name": "SQL",
+      "cc": "14,5",
+      "ex": "14,5",
+      "moy": "14,5"
+    }
+  ],
+  "currentMods": [
+    {
+      "code": "INFO401",
+      "name": "Algorithmique Avancée",
+      "moy": "13,00",
+      "dec": "Validé"
+    }
+  ],
+  "historyElems": [
+    {
+      "code": "MATH301",
+      "name": "Analyse III",
+      "moy": "15,00",
+      "au": "2024/2025"
+    }
+  ],
+  "historyMods": [
+    {
+      "code": "MATH3",
+      "name": "Mathématiques III",
+      "moy": "14,50",
+      "au": "2024/2025"
+    }
+  ],
+  "semestres": [
+    {
+      "name": "S7",
+      "au": "2025/2026",
+      "moy": "13,75",
+      "dec": "Validé"
+    }
+  ],
+  "annees": [
+    {
+      "name": "3A",
+      "au": "2024/2025",
+      "moy": "14,10",
+      "dec": "Admis"
+    }
+  ],
+  "absences": [
+    {
+      "element": "INFO401_1",
+      "date": "2026-06-01",
+      "justified": "NON"
+    }
+  ],
+  "sanctions": {
+    "status": "Avertissement",
+    "count": 1
+  }
+}

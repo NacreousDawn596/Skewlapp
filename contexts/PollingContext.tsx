@@ -118,7 +118,7 @@ export const [PollingProvider, usePolling] =
           
           try {
             const hasChanges = await pollAllEndpoints(silent);
-            if (hasChanges || !lastPollTime) {
+            if (hasChanges || !lastPollTime || !silent) {
               setLastPollTime(Date.now());
             }
           } catch (e: any) {

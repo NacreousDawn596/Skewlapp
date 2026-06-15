@@ -45,6 +45,9 @@ export interface PollSettings {
   notifySanctions: boolean;
   notificationsEnabled: boolean;
   enabled: boolean;
+  useMockServer: boolean;
+  biometricLock: boolean;
+  gradePrivacy: boolean;
 }
 
 const DEFAULT_SETTINGS: PollSettings = {
@@ -54,6 +57,9 @@ const DEFAULT_SETTINGS: PollSettings = {
   notifySanctions: true,
   notificationsEnabled: true,
   enabled: true,
+  useMockServer: false,
+  biometricLock: false,
+  gradePrivacy: false,
 };
 
 const lastFetchTime: Record<PollEndpoint, number> = {
@@ -197,8 +203,14 @@ export const pollEssentialEndpoints = async (silent: boolean = true): Promise<vo
 const shouldFetchEndpoint = (
   endpoint: PollEndpoint,
   settings: PollSettings,
+  force: boolean = false,
   dependentEndpointChanged: boolean = false
 ): boolean => {
+  // Manual refresh forces a fetch for non-fetch-once endpoints
+  if (force && !fetchOnceEndpoints.has(endpoint)) {
+    return true;
+  }
+
   // Always fetch regular endpoints on normal poll
   if (!fetchOnceEndpoints.has(endpoint)) {
     // currentMods polls 2x slower than currentElems
@@ -210,7 +222,7 @@ const shouldFetchEndpoint = (
     return true;
   }
 
-  // Fetch-once endpoints only if dependent data changed
+  // Fetch-once endpoints only if dependent data changed or forced and not yet cached
   if (dependentEndpointChanged) {
     return true;
   }
@@ -218,6 +230,10 @@ const shouldFetchEndpoint = (
   // Already fetched, don't fetch again
   const cached = lastFetchTime[endpoint] > 0;
   if (cached) {
+    if (force) {
+      console.log(`[Polling] ${endpoint} already cached, but forcing fetch anyway.`);
+      return true;
+    }
     console.log(`[Polling] ${endpoint} already cached forever, skipping fetch.`);
     return false;
   }
@@ -235,7 +251,8 @@ export const pollEndpoint = async (
   dependentEndpointChanged: boolean = false
 ): Promise<boolean> => {
   // Check if we should even fetch this endpoint
-  if (!shouldFetchEndpoint(endpoint, settings, dependentEndpointChanged)) {
+  const force = !silent;
+  if (!shouldFetchEndpoint(endpoint, settings, force, dependentEndpointChanged)) {
     return false;
   }
 
@@ -303,20 +320,30 @@ export const pollEndpoint = async (
       settings
     );
 
-    for (const activity of activities) {
-      await addActivity(activity);
+    // Only notify and add to activity feed for "real-time" endpoints
+    // This prevents duplicate notifications from 'allElems' and 'currentElems'
+    const isRealTimeEndpoint = 
+        endpoint === "currentElems" || 
+        endpoint === "currentMods" || 
+        endpoint === "absences" || 
+        endpoint === "sanctions";
 
-      const shouldNotify =
-        settings.notificationsEnabled &&
-        ((activity.type === "note" && settings.notifyNotes) ||
-          (activity.type === "absence" && settings.notifyAbsences) ||
-          (activity.type === "sanction" && settings.notifySanctions));
+    if (isRealTimeEndpoint) {
+        for (const activity of activities) {
+            await addActivity(activity);
 
-      if (shouldNotify) {
-        await scheduleNotification(activity.title, activity.description, {
-          route: activity.route,
-        });
-      }
+            const shouldNotify =
+                settings.notificationsEnabled &&
+                ((activity.type === "note" && settings.notifyNotes) ||
+                (activity.type === "absence" && settings.notifyAbsences) ||
+                (activity.type === "sanction" && settings.notifySanctions));
+
+            if (shouldNotify) {
+                await scheduleNotification(activity.title, activity.description, {
+                    route: activity.route,
+                });
+            }
+        }
     }
   }
 

@@ -21,7 +21,7 @@ import { getActivityFeed, clearActivityFeed } from "@/services/activity";
 import { getCachedData } from "@/services/cache";
 import { getPollingSettings, savePollingSettings } from "@/services/polling";
 import { ActivityItem } from "@/types/api";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import {
   Bell,
   BellOff,
@@ -68,8 +68,9 @@ export default function HomeScreen() {
   const { theme } = useTheme();
   const scale = useFontScale();
   const scaled = (size: number) => size * scale;
-  const { profile, handleUnauthorized } = useAuth();
+  const { profile, handleUnauthorized, isGradePrivacyEnabled } = useAuth();
   const { lastPollTime, isPolling, poll } = usePolling();
+  const router = useRouter();
   const netInfo = useNetInfo();
 
   const activityQuery = useQuery({
@@ -350,7 +351,7 @@ export default function HomeScreen() {
     queryKey: ["avatar", profile?.administrative_info?.Code],
     queryFn: async () => {
       if (!profile?.administrative_info?.Code) return null;
-      
+
       const code = profile.administrative_info.Code;
       // We fetch via schoolAppClient to benefit from the central CookieJar
       // but we need a custom fetch or method since get() returns JSON usually.
@@ -434,7 +435,7 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
-            refreshing={isPolling && !lastPollTime}
+            refreshing={isPolling}
             onRefresh={() => poll(false)}
             tintColor={theme.accent}
           />
@@ -481,26 +482,31 @@ export default function HomeScreen() {
             style={styles.statCard}
             onPress={() => {
               const url = profile?.download_links?.attestation_scolarite;
-              if (url) {
-                Linking.openURL(`https://schoolapp.ensam-umi.ac.ma${url}`);
-              }
+              if (url) Linking.openURL(`https://schoolapp.ensam-umi.ac.ma${url}`);
             }}
           >
             <FileText size={24} color="#4ECDC4" />
             <Text style={styles.statValue}>PDF</Text>
             <Text style={styles.statLabel}>Scolarité</Text>
           </TouchableOpacity>
-          <View style={styles.statCard}>
+          <TouchableOpacity
+            style={styles.statCard}
+            onPress={() => router.push("/absences")}
+          >
             <Clock size={24} color="#FF6B6B" />
             <Text style={styles.statValue}>{getAbsenceCount()}</Text>
             <Text style={styles.statLabel}>Absences</Text>
-          </View>
-          <View style={styles.statCard}>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.statCard}
+            onPress={() => router.push({ pathname: "/absences", params: { tab: "sanctions" } })}
+          >
             <ShieldAlert size={24} color="#FFD93D" />
             <Text style={styles.statValue}>{getSanctionValue()}</Text>
             <Text style={styles.statLabel}>Sanctions</Text>
-          </View>
+          </TouchableOpacity>
         </View>
+
 
         {!lastPollTime && isPolling && (
           <View style={{ paddingHorizontal: 16, marginTop: 12 }}>
@@ -572,6 +578,11 @@ export default function HomeScreen() {
                 <View style={styles.activityContent}>
                   <Text style={styles.activityTitle}>{activity.title}</Text>
                   <View style={styles.activityMeta}>
+                    {activity.description && (
+                      <Text style={[styles.activityTime, { marginBottom: 2, color: theme.text, opacity: 0.8 }]}>
+                        {isGradePrivacyEnabled ? "••••" : activity.description}
+                      </Text>
+                    )}
                     <Text style={styles.activityTime}>
                       {dayjs(activity.timestamp).fromNow()}
                     </Text>

@@ -50,7 +50,7 @@ interface MenuItem {
   color: string;
 }
 
-const NoteElementItem = ({ item, name, theme, styles, category, onStatsPress }: any) => {
+const NoteElementItem = ({ item, name, theme, styles, category, onStatsPress, isGradePrivacyEnabled }: any) => {
   const isPassing = (typeof item.noteVal === 'number' && item.noteVal >= 11) || item.gradeStr === "V";
   return (
     <View style={styles.dataCard}>
@@ -61,7 +61,7 @@ const NoteElementItem = ({ item, name, theme, styles, category, onStatsPress }: 
         </View>
         <TouchableOpacity style={{ alignItems: 'flex-end' }} onPress={() => onStatsPress("element", item)}>
           <Text style={[styles.dataGrade, { color: isPassing ? "#6BCB77" : theme.accent, fontSize: category === "currentElems" ? 22 : 18 }]}>
-            {item.gradeStr}
+            {isGradePrivacyEnabled ? "••" : item.gradeStr}
           </Text>
         </TouchableOpacity>
       </View>
@@ -79,7 +79,7 @@ const NoteElementItem = ({ item, name, theme, styles, category, onStatsPress }: 
             <TouchableOpacity key={i} style={styles.gradeBox} onPress={() => g.type ? onStatsPress("element", item, g.type) : null}>
               <Text style={styles.gradeLabel}>{g.label}</Text>
               <Text style={[styles.gradeVal, g.bold && { color: isPassing ? "#6BCB77" : theme.accent, fontWeight: '800' }]}>
-                {g.val ?? "--"}
+                {isGradePrivacyEnabled ? "••" : (g.val ?? "--")}
               </Text>
             </TouchableOpacity>
           ))}
@@ -89,7 +89,7 @@ const NoteElementItem = ({ item, name, theme, styles, category, onStatsPress }: 
   );
 };
 
-const NoteModuleItem = ({ item, name, theme, styles, onStatsPress }: any) => {
+const NoteModuleItem = ({ item, name, theme, styles, onStatsPress, isGradePrivacyEnabled }: any) => {
   const isPassing = (typeof item.noteVal === 'number' && item.noteVal >= 11) || item.gradeStr === "V";
   return (
     <TouchableOpacity style={styles.dataCard} onPress={() => onStatsPress("module", item)}>
@@ -100,7 +100,7 @@ const NoteModuleItem = ({ item, name, theme, styles, onStatsPress }: any) => {
         </View>
         <View style={{ alignItems: 'flex-end' }}>
           <Text style={[styles.dataGrade, { color: isPassing ? "#6BCB77" : theme.accent }]}>
-            {item.gradeStr}
+            {isGradePrivacyEnabled ? "••" : item.gradeStr}
           </Text>
           {item.Dec && <Text style={styles.dataMeta}>{item.Dec}</Text>}
         </View>
@@ -109,7 +109,7 @@ const NoteModuleItem = ({ item, name, theme, styles, onStatsPress }: any) => {
   );
 };
 
-const NoteSummaryItem = ({ item, theme, styles }: any) => {
+const NoteSummaryItem = ({ item, theme, styles, isGradePrivacyEnabled }: any) => {
   const isPassing = (typeof item.noteVal === 'number' && item.noteVal >= 11) || item.gradeStr === "V";
   return (
     <View style={[styles.dataCard, { borderLeftWidth: 4, borderLeftColor: isPassing ? "#6BCB77" : theme.accent }]}>
@@ -121,7 +121,7 @@ const NoteSummaryItem = ({ item, theme, styles }: any) => {
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <Text style={[styles.dataGrade, { color: isPassing ? "#6BCB77" : theme.accent, fontSize: 24 }]}>
-          {item.gradeStr}
+          {isGradePrivacyEnabled ? "••" : item.gradeStr}
         </Text>
         {item.PJ && <Text style={styles.dataMeta}>PJ: {item.PJ}</Text>}
       </View>
@@ -140,7 +140,7 @@ const MENU_ITEMS: MenuItem[] = [
 
 export default function NotesScreen() {
   const { theme } = useTheme();
-  const { profile, handleUnauthorized } = useAuth();
+  const { profile, handleUnauthorized, isGradePrivacyEnabled } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [statsModalVisible, setStatsModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
@@ -182,6 +182,11 @@ export default function NotesScreen() {
     refetchOnWindowFocus: false,
     refetchOnReconnect: true,
   });
+
+  useEffect(() => {
+    if (!lastPollTime) return;
+    void dataQuery.refetch();
+  }, [lastPollTime]);
 
   const handleCategoryPress = (category: Category) => {
     // 🔥 OPTIMIZATION: Remove LayoutAnimation for complex lists to avoid Android native crashes
@@ -461,7 +466,7 @@ export default function NotesScreen() {
       const noteVal = getVal(item);
       const gradeStr = item.note || item.Moy || item.Moy_Annee || item.Moy_SEM || "--";
       const displayName = getDisplayName(item, mappings[codeKey]);
-      const props = { key: index, item: { ...item, noteVal, gradeStr, code: codeKey }, name: displayName, theme, styles, category: selectedCategory, onStatsPress: handleStatsPress };
+      const props = { key: index, item: { ...item, noteVal, gradeStr, code: codeKey }, name: displayName, theme, styles, category: selectedCategory, onStatsPress: handleStatsPress, isGradePrivacyEnabled };
       if (selectedCategory === "currentElems" || selectedCategory === "allElems") return <NoteElementItem {...props} />;
       if (selectedCategory === "currentMods" || selectedCategory === "allMods") return <NoteModuleItem {...props} />;
       return <NoteSummaryItem {...props} />;
@@ -485,7 +490,7 @@ export default function NotesScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
-            refreshing={false}
+            refreshing={isPolling}
             onRefresh={() => poll(false)}
             tintColor={theme.accent}
           />
@@ -536,7 +541,8 @@ export default function NotesScreen() {
                 theme, 
                 styles, 
                 category: selectedCategory, 
-                onStatsPress: handleStatsPress 
+                onStatsPress: handleStatsPress,
+                isGradePrivacyEnabled
               };
               
               if (selectedCategory === "currentElems" || selectedCategory === "allElems") return <NoteElementItem {...props} />;

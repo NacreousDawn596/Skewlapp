@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Animated,
+  RefreshControl,
 } from "react-native";
 import { useTheme, useFontScale } from "@/themes/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -106,6 +107,13 @@ export default function CalculesScreen() {
   const { profile, handleUnauthorized } = useAuth();
   const { lastPollTime, isPolling, poll } = usePolling();
   const netInfo = useNetInfo();
+
+  useEffect(() => {
+    if (!lastPollTime) return;
+    void modulesLookupQuery.refetch();
+    void currentElemsQuery.refetch();
+    void historyElemsQuery.refetch();
+  }, [lastPollTime]);
 
   const [selNiveau, setSelNiveau] = useState("1A");
   const [selFiliere, setSelFiliere] = useState("");
@@ -508,7 +516,16 @@ export default function CalculesScreen() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={isPolling}
+            onRefresh={() => poll(false)}
+            tintColor={theme.accent}
+          />
+        }
+      >
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
           <Calculator size={24} color={theme.accent} />
           <Text style={{ fontSize: 24, fontWeight: '800', color: theme.text, marginLeft: 10 }}>Simulateur</Text>

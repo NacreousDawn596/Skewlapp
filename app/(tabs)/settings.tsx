@@ -23,21 +23,30 @@ import {
   ChevronRight,
   Github,
   Heart,
+  Terminal,
+  Globe,
+  Lock,
+  EyeOff,
+  Contact,
+  ShieldCheck,
 } from "lucide-react-native";
 import {
   getPollingSettings,
   savePollingSettings,
 } from "@/services/polling";
 import { usePolling } from "@/contexts/PollingContext";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiClient, MOCK_HOST, PRODUCTION_HOST } from "@/api/client";
+import StudentCardModal from "@/components/StudentCardModal";
 
 export default function SettingsScreen() {
   const { theme, setTheme, fontSize, setFontSize } = useTheme();
   const scale = useFontScale();
   const scaled = React.useCallback((size: number) => size * scale, [scale]);
   const styles = React.useMemo(() => createStyles(theme, scaled), [theme, scaled]);
-  const { logout } = useAuth();
+  const { logout, setIsGradePrivacyEnabled, setIsBiometricLockEnabled } = useAuth();
   const { startPolling, stopPolling } = usePolling();
+  const queryClient = useQueryClient();
 
   const settingsQuery = useQuery({
     queryKey: ["settings"],
@@ -53,7 +62,29 @@ export default function SettingsScreen() {
 
   const [showThemePicker, setShowThemePicker] = useState(false);
   const [showFontSizePicker, setShowFontSizePicker] = useState(false);
+  const [showStudentCard, setShowStudentCard] = useState(false);
   const [intervalInput, setIntervalInput] = useState("45");
+  const [mockHostInput, setMockHostInput] = useState(MOCK_HOST);
+  const [devModeVisible, setDevModeVisible] = useState(false);
+  const [tapCount, setTapCount] = useState(0);
+
+  const handleDevModeTap = () => {
+    const newCount = tapCount + 1;
+    setTapCount(newCount);
+    if (newCount >= 7) {
+      setDevModeVisible(true);
+      if (newCount === 7) {
+        Alert.alert("Mode Développeur", "Vous avez débloqué les paramètres expérimentaux.");
+      }
+    }
+  };
+
+  // Sync input with loaded settings
+  React.useEffect(() => {
+    if (settingsQuery.data?.useMockServer) {
+        setDevModeVisible(true);
+    }
+  }, [settingsQuery.data?.useMockServer]);
 
   // Sync input with loaded settings
   React.useEffect(() => {
@@ -103,7 +134,9 @@ export default function SettingsScreen() {
       />
 
       <View style={{ padding: 24, paddingTop: 40 }}>
-        <Text style={{ fontSize: scaled(32), fontWeight: '900', color: theme.text }}>Paramètres</Text>
+        <TouchableOpacity activeOpacity={1} onPress={handleDevModeTap}>
+            <Text style={{ fontSize: scaled(32), fontWeight: '900', color: theme.text }}>Paramètres</Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -198,6 +231,62 @@ export default function SettingsScreen() {
                 ))}
               </View>
             )}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Vie Privée et Utilitaires</Text>
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={styles.settingItem}
+              onPress={() => setShowStudentCard(true)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.iconContainer}>
+                <Contact size={scaled(20)} color={theme.accent} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingTitle}>Carte d&apos;Étudiant Virtuelle</Text>
+                <Text style={styles.settingSubtitle}>Votre identité académique</Text>
+              </View>
+              <ChevronRight size={scaled(20)} color={theme.muted} />
+            </TouchableOpacity>
+
+            <View style={styles.settingItem}>
+              <View style={styles.iconContainer}>
+                <ShieldCheck size={scaled(20)} color={theme.accent} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingTitle}>Verrouillage Biométrique</Text>
+                <Text style={styles.settingSubtitle}>Sécuriser l&apos;accès à l&apos;application</Text>
+              </View>
+              <Switch
+                value={settingsQuery.data?.biometricLock ?? false}
+                onValueChange={(value) => {
+                  updateSettingsMutation.mutate({ biometricLock: value });
+                  setIsBiometricLockEnabled(value);
+                }}
+                trackColor={{ false: theme.muted, true: theme.accent }}
+              />
+            </View>
+
+            <View style={[styles.settingItem, styles.settingItemLast]}>
+              <View style={styles.iconContainer}>
+                <EyeOff size={scaled(20)} color={theme.accent} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingTitle}>Mode Confidentialité</Text>
+                <Text style={styles.settingSubtitle}>Masquer les notes sur l&apos;écran d&apos;accueil</Text>
+              </View>
+              <Switch
+                value={settingsQuery.data?.gradePrivacy ?? false}
+                onValueChange={(value) => {
+                  updateSettingsMutation.mutate({ gradePrivacy: value });
+                  setIsGradePrivacyEnabled(value);
+                }}
+                trackColor={{ false: theme.muted, true: theme.accent }}
+              />
+            </View>
           </View>
         </View>
 
@@ -317,6 +406,60 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {devModeVisible && (
+          <View style={styles.section}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                <Text style={styles.sectionTitle}>Mode Développement</Text>
+                <View style={{ backgroundColor: '#FFD93D', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '900', color: '#000' }}>EXPERIMENTAL ONLY</Text>
+                </View>
+            </View>
+            <View style={styles.card}>
+              <View style={styles.settingItem}>
+                <View style={styles.iconContainer}>
+                  <Terminal size={scaled(20)} color={theme.accent} />
+                </View>
+                <View style={styles.settingContent}>
+                  <Text style={styles.settingTitle}>Utiliser le Serveur Mock</Text>
+                  <Text style={styles.settingSubtitle}>Redirection vers le backend de test</Text>
+                </View>
+                <Switch
+                  value={settingsQuery.data?.useMockServer ?? false}
+                  onValueChange={async (value) => {
+                    await updateSettingsMutation.mutateAsync({ useMockServer: value });
+                    apiClient.setBaseUrl(value ? mockHostInput : PRODUCTION_HOST);
+                    // Clear queries to force fresh fetch from the new environment
+                    queryClient.clear();
+                    Alert.alert(
+                      "Environnement changé",
+                      `L'application utilise désormais le serveur ${value ? "MOCK" : "PRODUCTION"}.`
+                    );
+                  }}
+                  trackColor={{ false: theme.muted, true: theme.accent }}
+                />
+              </View>
+              <View style={[styles.settingItem, styles.settingItemLast]}>
+                <View style={styles.iconContainer}>
+                  <Globe size={scaled(20)} color={theme.accent} />
+                </View>
+                <View style={styles.settingContent}>
+                  <Text style={styles.settingTitle}>Host du Serveur Mock</Text>
+                  <Text style={styles.settingSubtitle}>Adresse IP locale (ex: http://192.168...)</Text>
+                </View>
+                <TextInput
+                  style={[styles.intervalInput, { width: 180, textAlign: 'left', paddingHorizontal: 12 }]}
+                  value={mockHostInput}
+                  onChangeText={setMockHostInput}
+                  placeholder="http://..."
+                  placeholderTextColor={theme.muted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              </View>
+            </View>
+          </View>
+        )}
+
         <TouchableOpacity
           style={styles.logoutButton}
           onPress={handleLogout}
@@ -351,6 +494,11 @@ export default function SettingsScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <StudentCardModal 
+        visible={showStudentCard} 
+        onClose={() => setShowStudentCard(false)} 
+      />
     </View>
   );
 }
