@@ -45,9 +45,12 @@ export interface PollSettings {
   notifySanctions: boolean;
   notificationsEnabled: boolean;
   enabled: boolean;
-  useMockServer: boolean;
   biometricLock: boolean;
   gradePrivacy: boolean;
+  hapticsEnabled: boolean;
+  hapticsIntensity: number;
+  /** Historical-data refresh interval, in hours. */
+  historicalRefreshInterval: number;
 }
 
 const DEFAULT_SETTINGS: PollSettings = {
@@ -57,9 +60,11 @@ const DEFAULT_SETTINGS: PollSettings = {
   notifySanctions: true,
   notificationsEnabled: true,
   enabled: true,
-  useMockServer: false,
   biometricLock: false,
   gradePrivacy: false,
+  hapticsEnabled: true,
+  hapticsIntensity: 3,
+  historicalRefreshInterval: 24,
 };
 
 const lastFetchTime: Record<PollEndpoint, number> = {
@@ -248,7 +253,8 @@ export const pollEndpoint = async (
   endpoint: PollEndpoint,
   settings: PollSettings,
   silent: boolean = false,
-  dependentEndpointChanged: boolean = false
+  dependentEndpointChanged: boolean = false,
+  allowHistoricalNotify: boolean = false
 ): Promise<boolean> => {
   // Check if we should even fetch this endpoint
   const force = !silent;
@@ -328,7 +334,17 @@ export const pollEndpoint = async (
         endpoint === "absences" || 
         endpoint === "sanctions";
 
-    if (isRealTimeEndpoint) {
+    // Historical endpoints (allElems/allMods/semestres/annees) only notify
+    // during a scheduled historical refresh.
+    const isHistoricalEndpoint =
+        endpoint === "allElems" ||
+        endpoint === "allMods" ||
+        endpoint === "semestres" ||
+        endpoint === "annees";
+
+    const shouldEmit = isRealTimeEndpoint || (allowHistoricalNotify && isHistoricalEndpoint);
+
+    if (shouldEmit) {
         for (const activity of activities) {
             await addActivity(activity);
 
@@ -341,6 +357,7 @@ export const pollEndpoint = async (
             if (shouldNotify) {
                 await scheduleNotification(activity.title, activity.description, {
                     route: activity.route,
+                    ...(activity.type === "sanction" ? { tab: "sanctions" } : {}),
                 });
             }
         }
@@ -397,4 +414,101 @@ export const pollAllEndpoints = async (silent: boolean = false): Promise<boolean
   }
 
   return anyChanged || semestresChanged;
+};
+
+/* -------------------------------------------------------------------------- */
+/*                         Scheduled historical refresh                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Historical endpoints are refreshed on an independent, configurable schedule
+ * (default 24 hours) rather than on every polling cycle.
+ */
+export const HISTORICAL_ENDPOINTS = [
+  "allElems",
+  "allMods",
+  "semestres",
+  "annees",
+] as const;
+
+const HISTORICAL_LAST_REFRESH_KEY = "skewl_historical_last_refresh";
+
+let historicalRefreshRunning = false;
+
+export const getHistoricalLastRefresh = async (): Promise<number | null> => {
+  try {
+    const stored = await AsyncStorage.getItem(HISTORICAL_LAST_REFRESH_KEY);
+    if (!stored) return null;
+    const n = Number(stored);
+    return Number.isFinite(n) ? n : null;
+  } catch (error) {
+    console.error("Failed to load historical last refresh:", error);
+    return null;
+  }
+};
+
+export const setHistoricalLastRefresh = async (timestamp: number): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(HISTORICAL_LAST_REFRESH_KEY, String(timestamp));
+  } catch (error) {
+    console.error("Failed to save historical last refresh:", error);
+  }
+};
+
+/** True when a scheduled historical refresh is due based on the configured interval. */
+export const isHistoricalRefreshDue = async (): Promise<boolean> => {
+  const settings = await getPollingSettings();
+  if (settings.enabled === false) return false;
+
+  const last = await getHistoricalLastRefresh();
+  if (last === null) return true;
+
+  const intervalMs = settings.historicalRefreshInterval * 60 * 60 * 1000;
+  return Date.now() - last >= intervalMs;
+};
+
+/**
+ * Fetch historical endpoints once, generating notifications for detected
+ * changes. Timestamps are only updated after a successful retrieval.
+ *
+ * @returns true if any historical data changed.
+ */
+export const runHistoricalRefresh = async (): Promise<boolean> => {
+  if (historicalRefreshRunning) {
+    console.log("[HistoricalRefresh] Already running, skipping.");
+    return false;
+  }
+
+  historicalRefreshRunning = true;
+  try {
+    const settings = await getPollingSettings();
+    if (settings.enabled === false) return false;
+
+    const netState = await Network.getNetworkStateAsync();
+    if (!netState.isConnected || !netState.isInternetReachable) {
+      console.log("[HistoricalRefresh] Offline, skipping.");
+      return false;
+    }
+
+    let anyChanged = false;
+    for (const endpoint of HISTORICAL_ENDPOINTS) {
+      try {
+        // Force fetch (silent=false) and allow notifications for historical data.
+        const changed = await pollEndpoint(endpoint, settings, false, false, true);
+        if (changed) anyChanged = true;
+      } catch (e: any) {
+        if (e?.message === "UNAUTHORIZED") {
+          throw e;
+        }
+        console.warn(`[HistoricalRefresh] Failed for ${endpoint}:`, e);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    }
+
+    // Update the timestamp only after a successful retrieval of all endpoints.
+    await setHistoricalLastRefresh(Date.now());
+    return anyChanged;
+  } finally {
+    historicalRefreshRunning = false;
+  }
 };

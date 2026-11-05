@@ -218,7 +218,7 @@ export default function UtilsScreen() {
   const renderModuleLibrary = () => {
     const niveaus = ["1A", "2A", "3A", "4A", "5A"];
     const semestres = ["S1", "S2"];
-    const filieres = (filieresQuery.data?.map((i: any) => ({
+    const filieres = (((filieresQuery.data ?? []) as any[]).map((i: any) => ({
       name: i.Intitule,
       code: i.Code,
       acc: i.Accreditation,
@@ -383,7 +383,7 @@ export default function UtilsScreen() {
             >
               <View style={[styles.iconBg, { backgroundColor: '#4D96FF20' }]}><Library size={24} color="#4D96FF" /></View>
               <View style={styles.textContainer}>
-                <Text style={styles.menuTitle}>Plan d'étude</Text>
+                <Text style={styles.menuTitle}>Plan d&apos;étude</Text>
                 <Text style={styles.menuSub}>Seuils détaillés et informations sur le programme</Text>
               </View>
               <ChevronRight size={20} color={theme.muted} />
@@ -397,7 +397,7 @@ export default function UtilsScreen() {
               <View style={[styles.iconBg, { backgroundColor: '#6BCB7720' }]}><GraduationCap size={24} color="#6BCB77" /></View>
               <View style={styles.textContainer}>
                 <Text style={styles.menuTitle}>Filières</Text>
-                <Text style={styles.menuSub}>Parcourir toutes les filières d'ingénierie</Text>
+                <Text style={styles.menuSub}>Parcourir toutes les filières d&apos;ingénierie</Text>
               </View>
               <ChevronRight size={20} color={theme.muted} />
             </TouchableOpacity>

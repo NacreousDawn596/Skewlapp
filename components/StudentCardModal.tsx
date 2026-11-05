@@ -89,7 +89,7 @@ export default function StudentCardModal({ visible, onClose }: StudentCardModalP
                 <GraduationCap color={theme.accent} size={scaled(18)} />
               </View>
               <View>
-                <Text style={styles.headerTitle}>CARTE D'ÉTUDIANT</Text>
+                <Text style={styles.headerTitle}>CARTE D&apos;ÉTUDIANT</Text>
                 <Text style={styles.headerSubtitle}>SKEWLAPP DIGITAL ID</Text>
               </View>
             </View>
@@ -164,7 +164,7 @@ export default function StudentCardModal({ visible, onClose }: StudentCardModalP
 
           <View style={[styles.cardFooter, { backgroundColor: theme.background + '50' }]}>
             <Text style={[styles.footerText, { color: theme.muted }]}>
-              PROPRIÉTÉ DE L'ENSAM • ANNÉE ACADÉMIQUE 2025/2026
+              PROPRIÉTÉ DE L&apos;ENSAM • ANNÉE ACADÉMIQUE 2025/2026
             </Text>
           </View>
         </View>

@@ -28,7 +28,7 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { usePolling } from "@/contexts/PollingContext";
 import { useQuery } from "@tanstack/react-query";
-import { getCachedData, getCachedElementNames, setCachedElementNames } from "@/services/cache";
+import { getCachedData, getCachedElementNames, setCachedElementNames, findUnresolvedCodes, setUnresolvedNameCodes } from "@/services/cache";
 import { withReactQueryAuthHandler } from "@/services/apiErrorHandler";
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -182,7 +182,7 @@ export default function AbsencesScreen() {
     return found || "Unknown";
   };
 
-  const { data: moduleMappings } = useQuery({
+  const moduleMappingsQuery = useQuery({
     queryKey: ["absence_name_mappings", profile?.administrative_info],
     queryFn: withReactQueryAuthHandler(
       async () => {
@@ -237,6 +237,11 @@ export default function AbsencesScreen() {
             await setCachedElementNames(mapping);
           }
 
+          // Track codes still missing a name ("Unknown") so they are re-fetched
+          // from the request again on the next app open.
+          const unresolved = findUnresolvedCodes([...absences, ...sanctions], mapping);
+          await setUnresolvedNameCodes(unresolved);
+
           return mapping;
         } catch (error) {
           console.error("[Absences] Error in moduleMappings query:", error);
@@ -252,6 +257,13 @@ export default function AbsencesScreen() {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
+
+  const moduleMappings = moduleMappingsQuery.data;
+
+  useEffect(() => {
+    if (!lastPollTime) return;
+    void moduleMappingsQuery.refetch();
+  }, [lastPollTime, moduleMappingsQuery]);
 
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
@@ -349,7 +361,7 @@ export default function AbsencesScreen() {
               return (
                 <View style={styles.emptyContainer}>
                   <ShieldAlert size={48} color={theme.muted} style={{ opacity: 0.5 }} />
-                  <Text style={styles.emptyText}>Vous n'avez pas de sanctions académiques. Continuez comme ça !</Text>
+                  <Text style={styles.emptyText}>Vous n&apos;avez pas de sanctions académiques. Continuez comme ça !</Text>
                 </View>
               );
             }

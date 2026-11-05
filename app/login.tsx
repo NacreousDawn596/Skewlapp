@@ -14,6 +14,7 @@ import { useTheme } from "@/themes/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { LinearGradient } from "expo-linear-gradient";
 import { Lock, Mail } from "lucide-react-native";
+import { hapticSuccess, hapticError } from "@/services/haptics";
 
 export default function LoginScreen() {
   const { theme } = useTheme();
@@ -31,7 +32,12 @@ export default function LoginScreen() {
       return;
     }
 
-    await login(email, password);
+    try {
+      await login(email, password);
+      hapticSuccess();
+    } catch {
+      hapticError();
+    }
   };
 
   const onPressIn = () => {

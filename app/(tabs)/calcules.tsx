@@ -13,8 +13,10 @@ import {
   KeyboardAvoidingView,
   Animated,
   RefreshControl,
+  Alert,
 } from "react-native";
 import { useTheme, useFontScale } from "@/themes/ThemeContext";
+import { isDarkPalette } from "@/themes/palettes";
 import { useAuth } from "@/contexts/AuthContext";
 import { Stack } from "expo-router";
 import { schoolAppClient, secureStorage } from "@/api/client";
@@ -28,6 +30,15 @@ import {
   setCachedModules,
   updateCalculatorSelectionCache,
 } from "@/services/cache";
+import {
+  computeSimulatorResult,
+  requiredExamScore,
+  getPassingThreshold,
+  GoalSeekResult,
+  BaselineResult,
+  ModuleLookup,
+} from "@/services/grades";
+import { hapticImpact, hapticSelection } from "@/services/haptics";
 import { usePolling } from "@/contexts/PollingContext";
 import { useNetInfo } from "@react-native-community/netinfo";
 import { withReactQueryAuthHandler, isUnauthorizedError } from "@/services/apiErrorHandler";
@@ -36,6 +47,8 @@ import {
   ChevronUp,
   Calculator,
   Layers,
+  RotateCcw,
+  Target,
 } from "lucide-react-native";
 import { BlurView } from "expo-blur";
 
@@ -122,6 +135,10 @@ export default function CalculesScreen() {
   const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
   const marksLoadedRef = useRef(false);
 
+  // Goal-seek state
+  const [targetInput, setTargetInput] = useState("");
+  const [goalResult, setGoalResult] = useState<GoalSeekResult | null>(null);
+
   const calculatorSelection = useMemo(
     () => ({
       niveau: selNiveau,
@@ -176,23 +193,18 @@ export default function CalculesScreen() {
       async () => {
         const cacheKey = `${selNiveau}_${selFiliere}_${selSemestre}`;
         console.log(`[Calcules] Loading modules for ${cacheKey}`);
-        
+
         try {
-          console.log(`[Calcules] Attempting fresh fetch for ${cacheKey}...`);
           const freshData = await schoolAppClient.getModules(selNiveau, selFiliere, selSemestre);
           const hasContent = freshData && ((Array.isArray(freshData) && freshData.length > 0) || (typeof freshData === 'object' && Object.keys(freshData).length > 0));
-          
+
           if (hasContent) {
-            console.log(`[Calcules] Got fresh data for ${cacheKey}`);
             if (!(netInfo.isInternetReachable === false)) {
               await setCachedModules(selNiveau, selFiliere, selSemestre, freshData);
-              console.log(`[Calcules] Cached fresh data for ${cacheKey}`);
               await updateCalculatorSelectionCache(calculatorSelection, {
                 modulesLookup: freshData,
                 elementNames: buildCalculatorElementNames(freshData),
               });
-            } else {
-              console.log(`[Calcules] Offline, not caching for ${cacheKey}`);
             }
             return freshData;
           }
@@ -200,15 +212,12 @@ export default function CalculesScreen() {
           if (isUnauthorizedError(e)) {
             throw e;
           }
-          console.log(`[Calcules] Fresh fetch failed for ${cacheKey}:`, e);
         }
-        
-        console.log(`[Calcules] Trying cache for ${cacheKey}...`);
+
         const cachedData = await getCachedModules(selNiveau, selFiliere, selSemestre);
         const hasCachedContent = cachedData && ((Array.isArray(cachedData) && cachedData.length > 0) || (typeof cachedData === 'object' && Object.keys(cachedData).length > 0));
-        
+
         if (hasCachedContent) {
-          console.log(`[Calcules] Using cached data for ${cacheKey}`);
           await updateCalculatorSelectionCache(calculatorSelection, {
             modulesLookup: cachedData,
             elementNames: buildCalculatorElementNames(cachedData),
@@ -223,14 +232,12 @@ export default function CalculesScreen() {
         );
 
         if (calculatorCache?.modulesLookup) {
-          console.log(`[Calcules] Using calculator snapshot for ${cacheKey}`);
           return calculatorCache.modulesLookup;
         }
 
         const calculatorState = await getCalculatorCacheState();
 
         if (calculatorState?.modulesLookup) {
-          console.log(`[Calcules] Using root calculator snapshot for ${cacheKey}`);
           await updateCalculatorSelectionCache(calculatorSelection, {
             modulesLookup: calculatorState.modulesLookup,
             elementNames:
@@ -239,8 +246,7 @@ export default function CalculesScreen() {
           });
           return calculatorState.modulesLookup;
         }
-        
-        console.log(`[Calcules] No valid data found for ${cacheKey}`);
+
         return null;
       },
       handleUnauthorized
@@ -259,13 +265,12 @@ export default function CalculesScreen() {
       async () => {
         const cached = await getCachedData("currentElems");
         if (cached) {
-          console.log("[Calcules] Using cached currentElems");
           await updateCalculatorSelectionCache(calculatorSelection, {
             currentElems: cached,
           });
           return cached;
         }
-        
+
         const calculatorCache = await getCalculatorSelectionCache(
           selNiveau,
           selFiliere,
@@ -273,21 +278,18 @@ export default function CalculesScreen() {
         );
 
         if (calculatorCache?.currentElems) {
-          console.log("[Calcules] Using calculator snapshot for currentElems");
           return calculatorCache.currentElems;
         }
 
         const calculatorState = await getCalculatorCacheState();
 
         if (calculatorState?.currentElems) {
-          console.log("[Calcules] Using root calculator snapshot for currentElems");
           await updateCalculatorSelectionCache(calculatorSelection, {
             currentElems: calculatorState.currentElems,
           });
           return calculatorState.currentElems;
         }
 
-        console.log("[Calcules] No cache for currentElems, triggering poll...");
         if (netInfo.isInternetReachable !== false) {
           await poll(false);
         }
@@ -314,13 +316,12 @@ export default function CalculesScreen() {
       async () => {
         const cached = await getCachedData("allElems");
         if (cached) {
-          console.log("[Calcules] Using cached allElems");
           await updateCalculatorSelectionCache(calculatorSelection, {
             historyElems: cached,
           });
           return cached;
         }
-        
+
         const calculatorCache = await getCalculatorSelectionCache(
           selNiveau,
           selFiliere,
@@ -328,21 +329,18 @@ export default function CalculesScreen() {
         );
 
         if (calculatorCache?.historyElems) {
-          console.log("[Calcules] Using calculator snapshot for history allElems");
           return calculatorCache.historyElems;
         }
 
         const calculatorState = await getCalculatorCacheState();
 
         if (calculatorState?.historyElems) {
-          console.log("[Calcules] Using root calculator snapshot for history allElems");
           await updateCalculatorSelectionCache(calculatorSelection, {
             historyElems: calculatorState.historyElems,
           });
           return calculatorState.historyElems;
         }
 
-        console.log("[Calcules] No cache for allElems, triggering poll...");
         if (netInfo.isInternetReachable !== false) {
           await poll(false);
         }
@@ -431,6 +429,7 @@ export default function CalculesScreen() {
   const toggleModule = (code: string) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedModules(prev => ({ ...prev, [code]: !prev[code] }));
+    hapticSelection();
   };
 
   const updateMark = (elemCode: string, type: 'CC' | 'TP' | 'EX', val: string) => {
@@ -439,68 +438,48 @@ export default function CalculesScreen() {
     setUserMarks(prev => ({ ...prev, [elemCode]: { ...prev[elemCode], [type]: val } }));
   };
 
-  const calculatedData = useMemo(() => {
-    const modules = (modulesLookupQuery.data as any) || {};
-    const currentResults = (currentElemsQuery.data as any[]) || [];
+  // Reset the current selection's marks back to the portal baseline.
+  const resetMarks = () => {
+    Alert.alert(
+      "Réinitialiser le simulateur",
+      "Vos notes personnalisées seront effacées et remplacées par les notes du portail.",
+      [
+        { text: "Annuler", style: "cancel" },
+        {
+          text: "Réinitialiser",
+          style: "destructive",
+          onPress: () => {
+            setUserMarks({});
+            setGoalResult(null);
+            hapticImpact();
+          },
+        },
+      ]
+    );
+  };
+
+  const resultsMap = useMemo(() => {
+    const map = new Map<string, BaselineResult>();
     const historyResults = (historyElemsQuery.data as any[]) || [];
-    
-    // 🔥 OPTIMIZATION: Use Maps for O(1) lookups instead of .find() in a loop
-    const resultsMap = new Map<string, any>();
-    // History first, then current (to let current overwrite history if duplicate)
-    for (const r of historyResults) { if (r.CodeElem) resultsMap.set(r.CodeElem, r); }
-    for (const r of currentResults) { if (r.CodeElem) resultsMap.set(r.CodeElem, r); }
+    const currentResults = (currentElemsQuery.data as any[]) || [];
+    for (const r of historyResults) {
+      if (r?.CodeElem) map.set(r.CodeElem, r);
+    }
+    for (const r of currentResults) {
+      if (r?.CodeElem) map.set(r.CodeElem, r);
+    }
+    return map;
+  }, [historyElemsQuery.data, currentElemsQuery.data]);
 
-    let totalPoints = 0;
-    let totalCoef = 0;
+  const modulesLookup = (modulesLookupQuery.data as ModuleLookup) || {};
 
-    const processedModules = Object.entries(modules).map(([modCode, mData]: [string, any]) => {
-      let modSum = 0;
-      let mCoefSum = 0;
-      const elements = mData.elements?.map((elem: any) => {
-        const res = resultsMap.get(elem.code);
-        const u = userMarks[elem.code] || {};
-        const cc = u.CC !== undefined ? u.CC : (res?.CC || "");
-        const tp = u.TP !== undefined ? u.TP : (res?.TP || "");
-        const ex = u.EX !== undefined ? u.EX : (res?.EX || "");
-        let nCC = parseFloat(String(cc).replace(',', '.')) || 0;
-        let nTP = parseFloat(String(tp).replace(',', '.')) || 0;
-        let nEX = parseFloat(String(ex).replace(',', '.')) || 0;
-
-        const nRATT = parseFloat(String(res?.RATT).replace(',', '.'));
-        if (!isNaN(nRATT) && nRATT > 0) {
-          if (nCC > 0) nCC = Math.max(nCC, nRATT);
-          if (!isNaN(nEX) && nEX > 0) nEX = Math.max(nEX, nRATT);
-          else nEX = nRATT;
-          if (nTP > 0) nTP = Math.max(nTP, nRATT);
-        }
-        let eAvg = 0;
-        const cCC = parseFloat(elem.coef_cc) || 0;
-        const cEX = parseFloat(elem.coef_ex) || 0;
-        const cTP = parseFloat(elem.coef_tp) || 0;
-        const cEcrit = parseFloat(elem.coef_ecrit) || (cCC + cEX);
-        const totalWeight = cEcrit + cTP;
-        if (totalWeight > 0) {
-          const writtenWeightSum = cCC + cEX;
-          const writtenPartAvg = writtenWeightSum > 0 ? (nCC * cCC + nEX * cEX) / writtenWeightSum : 0;
-          eAvg = (writtenPartAvg * cEcrit + nTP * cTP) / totalWeight;
-        }
-        const eCoef = parseFloat(elem.coef_elem) || 1;
-        modSum += eAvg * eCoef;
-        mCoefSum += eCoef;
-        return { ...elem, cc, tp, ex, average: eAvg, baseline: res };
-      });
-      const mAvg = mCoefSum > 0 ? modSum / mCoefSum : 0;
-      const mCoef = parseFloat(mData.coef) || 1;
-      totalPoints += mAvg * mCoef;
-      totalCoef += mCoef;
-      return { ...mData, code: modCode, elements, average: mAvg };
-    });
-    const globalAvg = totalCoef > 0 ? totalPoints / totalCoef : 0;
-    return { modules: processedModules, globalAvg };
-  }, [modulesLookupQuery.data, userMarks, currentElemsQuery.data, historyElemsQuery.data]);
+  const calculatedData = useMemo(() => {
+    return computeSimulatorResult(modulesLookup, resultsMap, userMarks);
+  }, [modulesLookup, resultsMap, userMarks]);
 
   const getStatusColor = (val: number) => {
-    if (val >= 12) return "#6BCB77";
+    const threshold = getPassingThreshold(selNiveau);
+    if (val >= threshold) return "#6BCB77";
     if (val >= 10) return "#FFD93D";
     return "#FF6B6B";
   };
@@ -513,10 +492,39 @@ export default function CalculesScreen() {
     ]).start();
   }, [calculatedData.globalAvg, gpaAnim]);
 
+  const runGoalSeek = () => {
+    const target = parseFloat(targetInput.replace(',', '.'));
+    if (!Number.isFinite(target) || target < 0 || target > 20) {
+      setGoalResult(null);
+      Alert.alert("Objectif invalide", "Veuillez entrer une moyenne entre 0 et 20.");
+      return;
+    }
+    const result = requiredExamScore(target, modulesLookup, resultsMap, userMarks);
+    setGoalResult(result);
+    hapticImpact();
+  };
+
+  const goalSeekMessage = goalResult
+    ? (() => {
+        switch (goalResult.status) {
+          case "already-achieved":
+            return `Objectif déjà atteint (moyenne actuelle: ${goalResult.current.toFixed(2)}/20).`;
+          case "required":
+            return `Il vous faut au minimum ${goalResult.required.toFixed(2)}/20 à l'examen.`;
+          case "impossible":
+            return `Objectif impossible, même avec 20/20 (meilleur résultat: ${goalResult.best.toFixed(2)}/20).`;
+          case "no-missing-exams":
+            return "Toutes les notes d'examen sont déjà publiées. Rien à simuler.";
+          default:
+            return null;
+        }
+      })()
+    : null;
+
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
@@ -529,6 +537,11 @@ export default function CalculesScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
           <Calculator size={24} color={theme.accent} />
           <Text style={{ fontSize: 24, fontWeight: '800', color: theme.text, marginLeft: 10 }}>Simulateur</Text>
+          <View style={{ flex: 1 }} />
+          <TouchableOpacity style={styles.resetButton} onPress={resetMarks} activeOpacity={0.7}>
+            <RotateCcw size={scaled(16)} color={theme.accent} />
+            <Text style={styles.resetButtonText}>Réinitialiser</Text>
+          </TouchableOpacity>
         </View>
 
         {!lastPollTime && isPolling && (
@@ -544,14 +557,22 @@ export default function CalculesScreen() {
           <Text style={styles.selLabel}>Période Académique</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
             {["1A", "2A", "3A", "4A", "5A"].map(n => (
-              <TouchableOpacity key={n} onPress={() => setSelNiveau(n)} style={[styles.chip, selNiveau === n && styles.chipActive]}>
+              <TouchableOpacity
+                key={n}
+                onPress={() => { setSelNiveau(n); hapticSelection(); }}
+                style={[styles.chip, selNiveau === n && styles.chipActive]}
+              >
                 <Text style={[styles.chipText, selNiveau === n && styles.chipActiveText]}>{n}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
           <View style={styles.chipRow}>
             {["S1", "S2"].map(s => (
-              <TouchableOpacity key={s} onPress={() => setSelSemestre(s)} style={[styles.chip, selSemestre === s && styles.chipActive, { flex: 1 }]}>
+              <TouchableOpacity
+                key={s}
+                onPress={() => { setSelSemestre(s); hapticSelection(); }}
+                style={[styles.chip, selSemestre === s && styles.chipActive, { flex: 1 }]}
+              >
                 <Text style={[styles.chipText, selSemestre === s && styles.chipActiveText, { textAlign: 'center' }]}>{s === "S1" ? "Semestre 1" : "Semestre 2"}</Text>
               </TouchableOpacity>
             ))}
@@ -559,11 +580,38 @@ export default function CalculesScreen() {
           <Text style={styles.selLabel}>Filière</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {(filieresQuery.data as any[])?.map(f => (
-              <TouchableOpacity key={f.Code} onPress={() => setSelFiliere(f.Code)} style={[styles.chip, selFiliere === f.Code && styles.chipActive]}>
+              <TouchableOpacity
+                key={f.Code}
+                onPress={() => { setSelFiliere(f.Code); hapticSelection(); }}
+                style={[styles.chip, selFiliere === f.Code && styles.chipActive]}
+              >
                 <Text style={[styles.chipText, selFiliere === f.Code && styles.chipActiveText]}>{f.Code}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
+        </View>
+
+        <View style={styles.goalCard}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+            <Target size={scaled(18)} color={theme.accent} />
+            <Text style={styles.goalTitle}>Objectif de moyenne</Text>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <TextInput
+              style={styles.goalInput}
+              value={targetInput}
+              onChangeText={setTargetInput}
+              keyboardType="numeric"
+              placeholder="ex: 14"
+              placeholderTextColor={theme.muted}
+            />
+            <TouchableOpacity style={styles.goalButton} onPress={runGoalSeek} activeOpacity={0.7}>
+              <Text style={styles.goalButtonText}>Calculer</Text>
+            </TouchableOpacity>
+          </View>
+          {goalSeekMessage && (
+            <Text style={styles.goalResultText}>{goalSeekMessage}</Text>
+          )}
         </View>
 
         {modulesLookupQuery.isLoading ? (
@@ -595,7 +643,7 @@ export default function CalculesScreen() {
       </ScrollView>
 
       <View style={styles.footer}>
-        <BlurView intensity={80} tint={theme.name.toLowerCase().includes('dark') ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+        <BlurView intensity={80} tint={isDarkPalette(theme) ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
         <View style={styles.footerContent}>
           <View>
             <Text style={styles.footerLabel}>Moyenne Générale</Text>
@@ -614,13 +662,48 @@ const createStyles = (theme: any, scaled: (n: number) => number) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
     scrollContent: { padding: 16, paddingBottom: 120 },
-    selectorCard: { backgroundColor: theme.surface, borderRadius: 24, padding: 16, marginBottom: 20, elevation: 2 },
+    resetButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      backgroundColor: theme.accent + '15',
+    },
+    resetButtonText: {
+      fontSize: scaled(13),
+      fontWeight: '700',
+      color: theme.accent,
+      marginLeft: 6,
+    },
+    selectorCard: { backgroundColor: theme.surface, borderRadius: 24, padding: 16, marginBottom: 16, elevation: 2 },
     selLabel: { fontSize: 11, fontWeight: '800', color: theme.muted, marginBottom: 8, textTransform: 'uppercase' },
     chipRow: { flexDirection: 'row', marginBottom: 12 },
     chip: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 12, backgroundColor: theme.background, marginRight: 8, borderWidth: 1, borderColor: 'transparent' },
     chipActive: { backgroundColor: theme.accent + '20', borderColor: theme.accent },
     chipText: { fontSize: 12, fontWeight: '700', color: theme.muted },
     chipActiveText: { color: theme.accent },
+    goalCard: { backgroundColor: theme.surface, borderRadius: 24, padding: 16, marginBottom: 16, elevation: 2 },
+    goalTitle: { fontSize: scaled(15), fontWeight: '800', color: theme.text, marginLeft: 8 },
+    goalInput: {
+      flex: 1,
+      backgroundColor: theme.background,
+      borderRadius: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
+      fontSize: scaled(16),
+      fontWeight: '700',
+      color: theme.text,
+      marginRight: 10,
+    },
+    goalButton: {
+      backgroundColor: theme.accent,
+      borderRadius: 12,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+    },
+    goalButtonText: { fontSize: scaled(14), fontWeight: '800', color: '#FFFFFF' },
+    goalResultText: { fontSize: scaled(13), fontWeight: '600', color: theme.text, marginTop: 12 },
     modCard: { backgroundColor: theme.surface, borderRadius: 24, marginBottom: 16, overflow: 'hidden', elevation: 2 },
     modHeader: { padding: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     modTitle: { fontSize: 16, fontWeight: '700', color: theme.text, flex: 1 },

@@ -13,7 +13,7 @@ import {
 import { useTheme, FontSize, useFontScale } from "@/themes/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Stack } from "expo-router";
-import { THEME_PALETTES } from "@/themes/palettes";
+import { THEME_PALETTES, SYSTEM_THEME } from "@/themes/palettes";
 import {
   LogOut,
   Palette,
@@ -23,30 +23,37 @@ import {
   ChevronRight,
   Github,
   Heart,
-  Terminal,
-  Globe,
-  Lock,
   EyeOff,
   Contact,
   ShieldCheck,
+  Vibrate,
+  RefreshCw,
 } from "lucide-react-native";
 import {
   getPollingSettings,
   savePollingSettings,
 } from "@/services/polling";
+import {
+  HAPTICS_LEVELS,
+  DEFAULT_HAPTICS_INTENSITY,
+  DEFAULT_HAPTICS_ENABLED,
+  configureHaptics,
+  hapticTest,
+} from "@/services/haptics";
 import { usePolling } from "@/contexts/PollingContext";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient, MOCK_HOST, PRODUCTION_HOST } from "@/api/client";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import StudentCardModal from "@/components/StudentCardModal";
 
+const HAPTICS_INTENSITY_OPTIONS = HAPTICS_LEVELS.filter((l) => l.value > 0);
+const HISTORICAL_INTERVAL_OPTIONS = [6, 12, 24, 48, 72];
+
 export default function SettingsScreen() {
-  const { theme, setTheme, fontSize, setFontSize } = useTheme();
+  const { theme, themeName, setTheme, fontSize, setFontSize } = useTheme();
   const scale = useFontScale();
   const scaled = React.useCallback((size: number) => size * scale, [scale]);
   const styles = React.useMemo(() => createStyles(theme, scaled), [theme, scaled]);
   const { logout, setIsGradePrivacyEnabled, setIsBiometricLockEnabled } = useAuth();
   const { startPolling, stopPolling } = usePolling();
-  const queryClient = useQueryClient();
 
   const settingsQuery = useQuery({
     queryKey: ["settings"],
@@ -64,29 +71,7 @@ export default function SettingsScreen() {
   const [showFontSizePicker, setShowFontSizePicker] = useState(false);
   const [showStudentCard, setShowStudentCard] = useState(false);
   const [intervalInput, setIntervalInput] = useState("45");
-  const [mockHostInput, setMockHostInput] = useState(MOCK_HOST);
-  const [devModeVisible, setDevModeVisible] = useState(false);
-  const [tapCount, setTapCount] = useState(0);
 
-  const handleDevModeTap = () => {
-    const newCount = tapCount + 1;
-    setTapCount(newCount);
-    if (newCount >= 7) {
-      setDevModeVisible(true);
-      if (newCount === 7) {
-        Alert.alert("Mode Développeur", "Vous avez débloqué les paramètres expérimentaux.");
-      }
-    }
-  };
-
-  // Sync input with loaded settings
-  React.useEffect(() => {
-    if (settingsQuery.data?.useMockServer) {
-        setDevModeVisible(true);
-    }
-  }, [settingsQuery.data?.useMockServer]);
-
-  // Sync input with loaded settings
   React.useEffect(() => {
     if (settingsQuery.data?.interval) {
       setIntervalInput(settingsQuery.data.interval.toString());
@@ -124,6 +109,9 @@ export default function SettingsScreen() {
     { value: "xl", label: "XL" },
   ];
 
+  const hapticsEnabled = settingsQuery.data?.hapticsEnabled ?? DEFAULT_HAPTICS_ENABLED;
+  const hapticsIntensity = settingsQuery.data?.hapticsIntensity ?? DEFAULT_HAPTICS_INTENSITY;
+  const historicalInterval = settingsQuery.data?.historicalRefreshInterval ?? 24;
 
   return (
     <View style={styles.container}>
@@ -134,9 +122,7 @@ export default function SettingsScreen() {
       />
 
       <View style={{ padding: 24, paddingTop: 40 }}>
-        <TouchableOpacity activeOpacity={1} onPress={handleDevModeTap}>
-            <Text style={{ fontSize: scaled(32), fontWeight: '900', color: theme.text }}>Paramètres</Text>
-        </TouchableOpacity>
+        <Text style={{ fontSize: scaled(32), fontWeight: '900', color: theme.text }}>Paramètres</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -153,34 +139,48 @@ export default function SettingsScreen() {
               </View>
               <View style={styles.settingContent}>
                 <Text style={styles.settingTitle}>Couleur du Thème</Text>
-                <Text style={styles.settingSubtitle}>{theme.name}</Text>
+                <Text style={styles.settingSubtitle}>
+                  {themeName === SYSTEM_THEME ? "Système" : themeName}
+                </Text>
               </View>
               <ChevronRight size={scaled(20)} color={theme.muted} />
             </TouchableOpacity>
 
             {showThemePicker && (
               <View style={styles.themeGrid}>
+                <TouchableOpacity
+                  style={[
+                    styles.themeOption,
+                    { backgroundColor: theme.surface },
+                    themeName === SYSTEM_THEME && styles.themeOptionSelected,
+                  ]}
+                  onPress={() => {
+                    setTheme(SYSTEM_THEME);
+                    setShowThemePicker(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.themeOptionName, { color: theme.text }]}>Système</Text>
+                  <Text style={[styles.themeOptionHint, { color: theme.muted }]}>
+                    Suit l&apos;apparence de l&apos;appareil
+                  </Text>
+                </TouchableOpacity>
+
                 {THEME_PALETTES.map((palette) => (
                   <TouchableOpacity
                     key={palette.name}
                     style={[
                       styles.themeOption,
                       { backgroundColor: palette.surface },
-                      theme.name === palette.name &&
-                      styles.themeOptionSelected,
+                      themeName === palette.name && styles.themeOptionSelected,
                     ]}
                     onPress={() => {
-                      setTheme(palette);
+                      setTheme(palette.name);
                       setShowThemePicker(false);
                     }}
                     activeOpacity={0.7}
                   >
-                    <Text
-                      style={[
-                        styles.themeOptionName,
-                        { color: palette.text },
-                      ]}
-                    >
+                    <Text style={[styles.themeOptionName, { color: palette.text }]}>
                       {palette.name}
                     </Text>
                     <View style={styles.themeOptionColors}>
@@ -217,8 +217,7 @@ export default function SettingsScreen() {
                     key={size.value}
                     style={[
                       styles.fontSizeOption,
-                      fontSize === size.value &&
-                      styles.fontSizeOptionSelected,
+                      fontSize === size.value && styles.fontSizeOptionSelected,
                     ]}
                     onPress={() => {
                       setFontSize(size.value);
@@ -291,6 +290,83 @@ export default function SettingsScreen() {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Retour Haptique</Text>
+          <View style={styles.card}>
+            <View style={styles.settingItem}>
+              <View style={styles.iconContainer}>
+                <Vibrate size={scaled(20)} color={theme.accent} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingTitle}>Activer le retour haptique</Text>
+                <Text style={styles.settingSubtitle}>Vibrations lors des interactions</Text>
+              </View>
+              <Switch
+                value={hapticsEnabled}
+                onValueChange={(value) => {
+                  updateSettingsMutation.mutate({ hapticsEnabled: value });
+                  configureHaptics(value, hapticsIntensity);
+                }}
+                trackColor={{ false: theme.muted, true: theme.accent }}
+              />
+            </View>
+
+            <View style={styles.settingItem}>
+              <View style={styles.iconContainer}>
+                <Vibrate size={scaled(20)} color={theme.accent} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingTitle}>Intensité</Text>
+                <Text style={styles.settingSubtitle}>
+                  {HAPTICS_LEVELS.find((l) => l.value === hapticsIntensity)?.label ?? "Moyen"}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.intensityRow}>
+              {HAPTICS_INTENSITY_OPTIONS.map((level) => (
+                <TouchableOpacity
+                  key={level.value}
+                  style={[
+                    styles.intensityOption,
+                    hapticsIntensity === level.value && styles.intensityOptionSelected,
+                  ]}
+                  onPress={() => {
+                    updateSettingsMutation.mutate({ hapticsIntensity: level.value });
+                    configureHaptics(hapticsEnabled, level.value);
+                    hapticTest();
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.intensityOptionText,
+                      hapticsIntensity === level.value && styles.intensityOptionTextSelected,
+                    ]}
+                  >
+                    {level.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.settingItem, styles.settingItemLast]}
+              onPress={() => hapticTest()}
+              activeOpacity={0.7}
+            >
+              <View style={styles.iconContainer}>
+                <Vibrate size={scaled(20)} color={theme.accent} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingTitle}>Tester le retour haptique</Text>
+                <Text style={styles.settingSubtitle}>Ressentir l&apos;intensité sélectionnée</Text>
+              </View>
+              <ChevronRight size={scaled(20)} color={theme.muted} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Actualisation</Text>
           <View style={styles.card}>
             <View style={styles.settingItem}>
@@ -330,6 +406,47 @@ export default function SettingsScreen() {
                 keyboardType="number-pad"
                 editable={settingsQuery.data?.enabled ?? true}
               />
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Historique Académique</Text>
+          <View style={styles.card}>
+            <View style={styles.settingItem}>
+              <View style={styles.iconContainer}>
+                <RefreshCw size={scaled(20)} color={theme.accent} />
+              </View>
+              <View style={styles.settingContent}>
+                <Text style={styles.settingTitle}>Actualisation de l&apos;historique</Text>
+                <Text style={styles.settingSubtitle}>
+                  Fréquence de récupération des relevés passés
+                </Text>
+              </View>
+            </View>
+            <View style={styles.intensityRow}>
+              {HISTORICAL_INTERVAL_OPTIONS.map((hours) => (
+                <TouchableOpacity
+                  key={hours}
+                  style={[
+                    styles.intervalOption,
+                    historicalInterval === hours && styles.intervalOptionSelected,
+                  ]}
+                  onPress={() =>
+                    updateSettingsMutation.mutate({ historicalRefreshInterval: hours })
+                  }
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[
+                      styles.intervalOptionText,
+                      historicalInterval === hours && styles.intervalOptionTextSelected,
+                    ]}
+                  >
+                    {hours}h
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
         </View>
@@ -406,60 +523,6 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        {devModeVisible && (
-          <View style={styles.section}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                <Text style={styles.sectionTitle}>Mode Développement</Text>
-                <View style={{ backgroundColor: '#FFD93D', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginLeft: 8 }}>
-                    <Text style={{ fontSize: 10, fontWeight: '900', color: '#000' }}>EXPERIMENTAL ONLY</Text>
-                </View>
-            </View>
-            <View style={styles.card}>
-              <View style={styles.settingItem}>
-                <View style={styles.iconContainer}>
-                  <Terminal size={scaled(20)} color={theme.accent} />
-                </View>
-                <View style={styles.settingContent}>
-                  <Text style={styles.settingTitle}>Utiliser le Serveur Mock</Text>
-                  <Text style={styles.settingSubtitle}>Redirection vers le backend de test</Text>
-                </View>
-                <Switch
-                  value={settingsQuery.data?.useMockServer ?? false}
-                  onValueChange={async (value) => {
-                    await updateSettingsMutation.mutateAsync({ useMockServer: value });
-                    apiClient.setBaseUrl(value ? mockHostInput : PRODUCTION_HOST);
-                    // Clear queries to force fresh fetch from the new environment
-                    queryClient.clear();
-                    Alert.alert(
-                      "Environnement changé",
-                      `L'application utilise désormais le serveur ${value ? "MOCK" : "PRODUCTION"}.`
-                    );
-                  }}
-                  trackColor={{ false: theme.muted, true: theme.accent }}
-                />
-              </View>
-              <View style={[styles.settingItem, styles.settingItemLast]}>
-                <View style={styles.iconContainer}>
-                  <Globe size={scaled(20)} color={theme.accent} />
-                </View>
-                <View style={styles.settingContent}>
-                  <Text style={styles.settingTitle}>Host du Serveur Mock</Text>
-                  <Text style={styles.settingSubtitle}>Adresse IP locale (ex: http://192.168...)</Text>
-                </View>
-                <TextInput
-                  style={[styles.intervalInput, { width: 180, textAlign: 'left', paddingHorizontal: 12 }]}
-                  value={mockHostInput}
-                  onChangeText={setMockHostInput}
-                  placeholder="http://..."
-                  placeholderTextColor={theme.muted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-              </View>
-            </View>
-          </View>
-        )}
-
         <TouchableOpacity
           style={styles.logoutButton}
           onPress={handleLogout}
@@ -486,7 +549,6 @@ export default function SettingsScreen() {
         <View style={styles.creditsContainer}>
           <Text style={styles.creditsText}>
             by Aferiad Kamal & Feddoul Salma
-            {/* Aferiad Kamal */}
           </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
             <Text style={styles.creditsText}>made with lack of sleep, caffeine and </Text>
@@ -495,9 +557,9 @@ export default function SettingsScreen() {
         </View>
       </ScrollView>
 
-      <StudentCardModal 
-        visible={showStudentCard} 
-        onClose={() => setShowStudentCard(false)} 
+      <StudentCardModal
+        visible={showStudentCard}
+        onClose={() => setShowStudentCard(false)}
       />
     </View>
   );
@@ -557,6 +619,7 @@ const createStyles = (theme: any, scaled: (n: number) => number) =>
     },
     themeOptionSelected: { borderColor: theme.accent },
     themeOptionName: { fontSize: scaled(15), fontWeight: "700", marginBottom: 8 },
+    themeOptionHint: { fontSize: scaled(12), marginTop: -4, marginBottom: 4 },
     themeOptionColors: { flexDirection: "row", gap: 6 },
     colorSwatch: { width: 24, height: 24, borderRadius: 12 },
     fontSizeGrid: { padding: 16, gap: 10, flexDirection: "row", flexWrap: "wrap" },
@@ -580,6 +643,49 @@ const createStyles = (theme: any, scaled: (n: number) => number) =>
       fontWeight: "700",
       color: theme.text,
     },
+    intensityRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      padding: 16,
+      paddingTop: 8,
+    },
+    intensityOption: {
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 10,
+      backgroundColor: theme.background,
+      borderWidth: 1,
+      borderColor: "transparent",
+    },
+    intensityOptionSelected: {
+      borderColor: theme.accent,
+      backgroundColor: theme.accent + "15",
+    },
+    intensityOptionText: {
+      fontSize: scaled(12),
+      fontWeight: "700",
+      color: theme.muted,
+    },
+    intensityOptionTextSelected: { color: theme.accent },
+    intervalOption: {
+      paddingVertical: 8,
+      paddingHorizontal: 14,
+      borderRadius: 10,
+      backgroundColor: theme.background,
+      borderWidth: 1,
+      borderColor: "transparent",
+    },
+    intervalOptionSelected: {
+      borderColor: theme.accent,
+      backgroundColor: theme.accent + "15",
+    },
+    intervalOptionText: {
+      fontSize: scaled(13),
+      fontWeight: "700",
+      color: theme.muted,
+    },
+    intervalOptionTextSelected: { color: theme.accent },
     intervalInput: {
       backgroundColor: theme.background,
       borderRadius: 10,

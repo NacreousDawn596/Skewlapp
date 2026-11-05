@@ -13,6 +13,8 @@ import {
   resetFetchTimes,
   startForegroundService,
   stopForegroundService,
+  isHistoricalRefreshDue,
+  runHistoricalRefresh,
 } from "../services/polling";
 import { useAuth } from "./AuthContext";
 import { runSinglePoll } from "@/services/pollExecutor";
@@ -46,6 +48,16 @@ TaskManager.defineTask(BACKGROUND_POLL_TASK, async () => {
     try {
       // For background tasks, we can use a lighter poll to be faster
       await runSinglePoll(() => pollEssentialEndpoints(true));
+
+      // Opportunistically refresh historical data when its schedule is due.
+      try {
+        if (await isHistoricalRefreshDue()) {
+          await runHistoricalRefresh();
+        }
+      } catch (e: any) {
+        console.warn("[BackgroundFetch] Historical refresh skipped:", e?.message);
+      }
+
       return BackgroundFetch.BackgroundFetchResult.NewData;
     } catch (e: any) {
       if (e.message === "UNAUTHORIZED") {
@@ -117,10 +129,10 @@ export const [PollingProvider, usePolling] =
           if (!silent) setIsPolling(true);
           
           try {
-            const hasChanges = await pollAllEndpoints(silent);
-            if (hasChanges || !lastPollTime || !silent) {
-              setLastPollTime(Date.now());
-            }
+            await pollAllEndpoints(silent);
+            // Every successful synchronization (including silent, unchanged
+            // polls) updates the last-sync timestamp.
+            setLastPollTime(Date.now());
           } catch (e: any) {
             if (e.message === "UNAUTHORIZED") {
               console.warn("[Polling] Session expired during poll");
@@ -136,6 +148,26 @@ export const [PollingProvider, usePolling] =
       },
       [isNetworkReady, isAuthenticated, handleUnauthorized]
     );
+
+    /* ---------------------------------------------------------------------- */
+    /*                       SCHEDULED HISTORICAL REFRESH                       */
+    /* ---------------------------------------------------------------------- */
+
+    const checkHistoricalRefresh = useCallback(async () => {
+      try {
+        const due = await isHistoricalRefreshDue();
+        if (!due) return;
+        console.log("[PollingContext] Historical refresh due, running...");
+        await runHistoricalRefresh();
+      } catch (e: any) {
+        if (e?.message === "UNAUTHORIZED") {
+          console.warn("[PollingContext] Historical refresh session expired");
+          await handleUnauthorized();
+        } else {
+          console.error("[PollingContext] Historical refresh error:", e);
+        }
+      }
+    }, [handleUnauthorized]);
 
     /* ---------------------------------------------------------------------- */
     /*                         BACKGROUND TASK SETUP                            */
@@ -192,6 +224,9 @@ export const [PollingProvider, usePolling] =
         // Perform initial poll
         await poll(false);
 
+        // Run a scheduled historical refresh if it is due.
+        await checkHistoricalRefresh();
+
         // 🔥 SELF-CORRECTING TIMEOUT PATTERN
         // More resilient than setInterval when JS thread is busy
         const scheduleNext = async () => {
@@ -212,7 +247,7 @@ export const [PollingProvider, usePolling] =
       } finally {
         isStartingRef.current = false;
       }
-    }, [poll, isAuthenticated, isNetworkReady, registerBackgroundTask]);
+    }, [poll, isAuthenticated, isNetworkReady, registerBackgroundTask, checkHistoricalRefresh]);
 
     const stopPolling = useCallback(async () => {
       hasStartedRef.current = false;
@@ -238,6 +273,7 @@ export const [PollingProvider, usePolling] =
         ) {
           if (isAuthenticated && isNetworkReady) {
             startPolling();
+            checkHistoricalRefresh();
           }
         }
 
@@ -252,7 +288,7 @@ export const [PollingProvider, usePolling] =
       });
 
       return () => sub.remove();
-    }, [isAuthenticated, isNetworkReady, startPolling]);
+    }, [isAuthenticated, isNetworkReady, startPolling, checkHistoricalRefresh]);
 
     /* ---------------------------------------------------------------------- */
     /*                      AUTH + NETWORK GATED START                          */

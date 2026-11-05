@@ -139,7 +139,7 @@ export const [AuthProvider, useAuth] =
                   (await schoolAppClient.getProfile()) as UserProfile | null;
 
                 if (profileData) {
-                  const cookies = await ((schoolAppClient as any).httpClient.cookieJar as any).get((schoolAppClient as any).baseUrl);
+                  const cookies = await schoolAppClient.httpClient.cookieJar.get(schoolAppClient.baseUrl);
                   const sessionIdMatch = cookies.match(/JSESSIONID=([^;]+)/);
                   if (sessionIdMatch) {
                     profileData.session_id = sessionIdMatch[1];
@@ -221,7 +221,7 @@ export const [AuthProvider, useAuth] =
           throw new Error("Login succeeded but profile fetch failed.");
         }
 
-        const cookies = await ((schoolAppClient as any).httpClient.cookieJar as any).get((schoolAppClient as any).baseUrl);
+        const cookies = await schoolAppClient.httpClient.cookieJar.get(schoolAppClient.baseUrl);
         const sessionIdMatch = cookies.match(/JSESSIONID=([^;]+)/);
         if (sessionIdMatch) {
           profileData.session_id = sessionIdMatch[1];
@@ -296,7 +296,7 @@ export const [AuthProvider, useAuth] =
           return false;
         }
 
-        const cookies = await ((schoolAppClient as any).httpClient.cookieJar as any).get((schoolAppClient as any).baseUrl);
+        const cookies = await schoolAppClient.httpClient.cookieJar.get(schoolAppClient.baseUrl);
         const sessionIdMatch = cookies.match(/JSESSIONID=([^;]+)/);
         if (sessionIdMatch) {
           profileData.session_id = sessionIdMatch[1];

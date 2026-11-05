@@ -156,3 +156,33 @@ export const THEME_PALETTES: ThemePalette[] = [
 ];
 
 export const DEFAULT_THEME = THEME_PALETTES[0];
+
+/** Sentinel value meaning "follow the operating-system appearance". */
+export const SYSTEM_THEME = "system";
+
+/** Palette used when following the system in dark mode. */
+export const DEFAULT_DARK_THEME = THEME_PALETTES.find((p) => p.name === "Noir Luxe") ?? THEME_PALETTES[0];
+
+/** Palette used when following the system in light mode. */
+export const DEFAULT_LIGHT_THEME =
+  THEME_PALETTES.find((p) => p.name === "Moonstone Light") ?? THEME_PALETTES[0];
+
+/** Resolve a theme name (palette name or "system") to a concrete palette. */
+export function resolveTheme(name: string, scheme: "light" | "dark" | null | undefined): ThemePalette {
+  if (name !== SYSTEM_THEME) {
+    return THEME_PALETTES.find((p) => p.name === name) ?? DEFAULT_DARK_THEME;
+  }
+  return scheme === "light" ? DEFAULT_LIGHT_THEME : DEFAULT_DARK_THEME;
+}
+
+/** True when a palette has a dark background (based on relative luminance). */
+export function isDarkPalette(palette: ThemePalette): boolean {
+  const hex = palette.background.replace("#", "");
+  const full = hex.length === 3 ? hex.split("").map((c) => c + c).join("") : hex;
+  if (full.length !== 6) return true;
+  const r = parseInt(full.slice(0, 2), 16) / 255;
+  const g = parseInt(full.slice(2, 4), 16) / 255;
+  const b = parseInt(full.slice(4, 6), 16) / 255;
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance < 0.5;
+}

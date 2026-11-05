@@ -1,14 +1,18 @@
 import createContextHook from "@nkzw/create-context-hook";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useEffect, useState } from "react";
-import { DEFAULT_THEME, THEME_PALETTES, ThemePalette } from "./palettes";
+import { useEffect, useMemo, useState } from "react";
+import { useColorScheme } from "react-native";
+import { SYSTEM_THEME, resolveTheme, ThemePalette } from "./palettes";
 
 export type FontSize = "small" | "normal" | "large" | "xl";
 
 interface ThemeContextValue {
+  /** Resolved palette (already follows system when "system" is selected). */
   theme: ThemePalette;
+  /** Selected preference: a palette name or "system". */
+  themeName: string;
   fontSize: FontSize;
-  setTheme: (theme: ThemePalette) => void;
+  setTheme: (name: string) => void;
   setFontSize: (size: FontSize) => void;
   isLoading: boolean;
 }
@@ -18,9 +22,15 @@ const FONT_SIZE_KEY = "skewl_font_size";
 
 export const [ThemeProvider, useTheme] = createContextHook<ThemeContextValue>(
   () => {
-    const [theme, setThemeState] = useState<ThemePalette>(DEFAULT_THEME);
+    const systemScheme = useColorScheme();
+    const [themeName, setThemeName] = useState<string>(SYSTEM_THEME);
     const [fontSize, setFontSizeState] = useState<FontSize>("normal");
     const [isLoading, setIsLoading] = useState(true);
+
+    const theme = useMemo(
+      () => resolveTheme(themeName, systemScheme),
+      [themeName, systemScheme]
+    );
 
     useEffect(() => {
       const loadTheme = async () => {
@@ -31,10 +41,7 @@ export const [ThemeProvider, useTheme] = createContextHook<ThemeContextValue>(
           ]);
 
           if (savedTheme) {
-            const found = THEME_PALETTES.find((p) => p.name === savedTheme);
-            if (found) {
-              setThemeState(found);
-            }
+            setThemeName(savedTheme);
           }
 
           if (savedFontSize && ["small", "normal", "large", "xl"].includes(savedFontSize)) {
@@ -50,10 +57,10 @@ export const [ThemeProvider, useTheme] = createContextHook<ThemeContextValue>(
       loadTheme();
     }, []);
 
-    const setTheme = async (newTheme: ThemePalette) => {
-      setThemeState(newTheme);
+    const setTheme = async (name: string) => {
+      setThemeName(name);
       try {
-        await AsyncStorage.setItem(THEME_KEY, newTheme.name);
+        await AsyncStorage.setItem(THEME_KEY, name);
       } catch (error) {
         console.error("Failed to save theme:", error);
       }
@@ -70,6 +77,7 @@ export const [ThemeProvider, useTheme] = createContextHook<ThemeContextValue>(
 
     return {
       theme,
+      themeName,
       fontSize,
       setTheme,
       setFontSize,

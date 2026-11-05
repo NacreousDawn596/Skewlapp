@@ -30,21 +30,6 @@ SkewlApp is a professional, feature-rich mobile application designed for student
 
 ---
 
-## 🛠 Developer & Testing Tools
-
-### **Ultimate Realism Mock Server**
-Located in `./mockServer`, this ExpressJS-based backend provides a 100% complete simulation of the SchoolApp platform.
-- **HTML Table Generation:** Mimics the exact HTML structure of the school portal to test real parsing logic.
-- **Session & CSRF Management:** Simulates cookie-based auth and security tokens.
-- **State Persistence:** Local `db.json` stores all your test scenarios.
-
-### **Hidden Developer Mode**
-Reveal the hidden developer settings to switch between Production and Mock environments at runtime.
-- **How to unlock:** Tap the **"Paramètres"** title in the settings tab **7 times**.
-- **Features:** Instantly redirect app traffic to a local IP and clear cache for fresh testing.
-
----
-
 ## 📝 Recent Changelog (v5.1.0)
 
 - **FIX:** Refactored grade detection to handle commas (e.g., `15,50`) correctly.
@@ -52,8 +37,6 @@ Reveal the hidden developer settings to switch between Production and Mock envir
 - **FIX:** Implemented two-layer deduplication to prevent double notifications.
 - **FIX:** Added `useEffect` sync hooks to ensure UI refreshes immediately after background polls.
 - **NEW:** Added "Pull-to-Refresh" to the Grade Simulator.
-- **NEW:** Integrated the **Ultimate Realism Mock Server** for sandbox testing.
-- **NEW:** Added hidden **Developer Mode** with host-switching capabilities.
 - **IMPROVED:** Localized all system notifications to French.
 
 ---
@@ -61,7 +44,7 @@ Reveal the hidden developer settings to switch between Production and Mock envir
 ## 📦 Technical Stack
 - **Framework:** React Native (Expo)
 - **Language:** TypeScript
-- **Data:** React Query + Zustand
+- **Data:** React Query
 - **Parsing:** Cheerio (for HTML extraction)
 - **API:** Custom `schoolapp` package
 

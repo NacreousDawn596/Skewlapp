@@ -32,8 +32,11 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { usePolling } from "@/contexts/PollingContext";
 import { useQuery } from "@tanstack/react-query";
-import { getCachedData, getCachedElementNames, setCachedElementNames } from "@/services/cache";
+import { getCachedData, getCachedElementNames, setCachedElementNames, findUnresolvedCodes, setUnresolvedNameCodes } from "@/services/cache";
 import { withReactQueryAuthHandler } from "@/services/apiErrorHandler";
+import { getPassingThreshold, buildSemesterTrend } from "@/services/grades";
+import GradeTrendChart from "@/components/GradeTrendChart";
+import { hapticSelection } from "@/services/haptics";
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -50,8 +53,9 @@ interface MenuItem {
   color: string;
 }
 
-const NoteElementItem = ({ item, name, theme, styles, category, onStatsPress, isGradePrivacyEnabled }: any) => {
-  const isPassing = (typeof item.noteVal === 'number' && item.noteVal >= 11) || item.gradeStr === "V";
+const NoteElementItem = ({ item, name, theme, styles, category, onStatsPress, isGradePrivacyEnabled, studentNiveau }: any) => {
+  const threshold = getPassingThreshold(item.Niveau ?? studentNiveau);
+  const isPassing = (typeof item.noteVal === 'number' && item.noteVal >= threshold) || item.gradeStr === "V";
   return (
     <View style={styles.dataCard}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -89,8 +93,9 @@ const NoteElementItem = ({ item, name, theme, styles, category, onStatsPress, is
   );
 };
 
-const NoteModuleItem = ({ item, name, theme, styles, onStatsPress, isGradePrivacyEnabled }: any) => {
-  const isPassing = (typeof item.noteVal === 'number' && item.noteVal >= 11) || item.gradeStr === "V";
+const NoteModuleItem = ({ item, name, theme, styles, onStatsPress, isGradePrivacyEnabled, studentNiveau }: any) => {
+  const threshold = getPassingThreshold(item.Niveau ?? studentNiveau);
+  const isPassing = (typeof item.noteVal === 'number' && item.noteVal >= threshold) || item.gradeStr === "V";
   return (
     <TouchableOpacity style={styles.dataCard} onPress={() => onStatsPress("module", item)}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -109,8 +114,9 @@ const NoteModuleItem = ({ item, name, theme, styles, onStatsPress, isGradePrivac
   );
 };
 
-const NoteSummaryItem = ({ item, theme, styles, isGradePrivacyEnabled }: any) => {
-  const isPassing = (typeof item.noteVal === 'number' && item.noteVal >= 11) || item.gradeStr === "V";
+const NoteSummaryItem = ({ item, theme, styles, isGradePrivacyEnabled, studentNiveau }: any) => {
+  const threshold = getPassingThreshold(item.Niveau ?? studentNiveau);
+  const isPassing = (typeof item.noteVal === 'number' && item.noteVal >= threshold) || item.gradeStr === "V";
   return (
     <View style={[styles.dataCard, { borderLeftWidth: 4, borderLeftColor: isPassing ? "#6BCB77" : theme.accent }]}>
       <View style={{ flex: 1 }}>
@@ -187,6 +193,23 @@ export default function NotesScreen() {
     if (!lastPollTime) return;
     void dataQuery.refetch();
   }, [lastPollTime]);
+
+  const studentNiveau = profile?.administrative_info?.Niveau ?? null;
+
+  const trendQuery = useQuery({
+    queryKey: ["trend_semestres"],
+    queryFn: withReactQueryAuthHandler(
+      () => getCachedData("semestres"),
+      handleUnauthorized
+    ),
+    staleTime: Infinity,
+    gcTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+  });
+
+  const trendPoints = useMemo(() => buildSemesterTrend(trendQuery.data), [trendQuery.data]);
 
   const handleCategoryPress = (category: Category) => {
     // 🔥 OPTIMIZATION: Remove LayoutAnimation for complex lists to avoid Android native crashes
@@ -287,7 +310,7 @@ export default function NotesScreen() {
   }, [dataQuery.data, profile]);
   const targetsKey = targets.join("|");
 
-  const { data: moduleMappings } = useQuery({
+  const moduleMappingsQuery = useQuery({
     queryKey: ["global_name_mappings", targetsKey],
     queryFn: withReactQueryAuthHandler(
       async () => {
@@ -324,6 +347,11 @@ export default function NotesScreen() {
           await setCachedElementNames(mapping);
         }
 
+        // Track codes still missing a name ("Unknown") so they are re-fetched
+        // from the request again on the next app open.
+        const unresolved = findUnresolvedCodes(dataQuery.data, mapping);
+        await setUnresolvedNameCodes(unresolved);
+
         return mapping;
       },
       handleUnauthorized
@@ -335,6 +363,13 @@ export default function NotesScreen() {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   });
+
+  const moduleMappings = moduleMappingsQuery.data;
+
+  useEffect(() => {
+    if (!lastPollTime) return;
+    void moduleMappingsQuery.refetch();
+  }, [lastPollTime, moduleMappingsQuery]);
 
   const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.background },
@@ -442,35 +477,7 @@ export default function NotesScreen() {
     setItemType(type);
     setStatsType(subType || "moy");
     setStatsModalVisible(true);
-  };
-
-  const renderContent = () => {
-    const data = (dataQuery.data as any[]) || [];
-
-    if (dataQuery.isLoading && data.length === 0) {
-      return <ActivityIndicator color={theme.accent} style={{ marginTop: 40 }} />;
-    }
-
-    if (data.length === 0) {
-      return (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>Aucun relevé trouvé pour cette catégorie.</Text>
-        </View>
-      );
-    }
-
-    const mappings = (moduleMappings && typeof moduleMappings === 'object') ? moduleMappings : {};
-
-    return data.map((item, index) => {
-      const codeKey = item.CodeElem || item.CodeMod || item.Semestre || item.Niveau || "Unknown";
-      const noteVal = getVal(item);
-      const gradeStr = item.note || item.Moy || item.Moy_Annee || item.Moy_SEM || "--";
-      const displayName = getDisplayName(item, mappings[codeKey]);
-      const props = { key: index, item: { ...item, noteVal, gradeStr, code: codeKey }, name: displayName, theme, styles, category: selectedCategory, onStatsPress: handleStatsPress, isGradePrivacyEnabled };
-      if (selectedCategory === "currentElems" || selectedCategory === "allElems") return <NoteElementItem {...props} />;
-      if (selectedCategory === "currentMods" || selectedCategory === "allMods") return <NoteModuleItem {...props} />;
-      return <NoteSummaryItem {...props} />;
-    });
+    hapticSelection();
   };
 
   return (
@@ -506,23 +513,31 @@ export default function NotesScreen() {
         )}
 
         {!selectedCategory ? (
-          <View style={styles.menuGrid}>
-            {MENU_ITEMS.map((item) => (
-              <TouchableOpacity key={item.id} style={styles.menuCard} onPress={() => handleCategoryPress(item.id)} activeOpacity={0.7}>
-                <View style={[styles.iconBg, { backgroundColor: item.color + "15" }]}>
-                  {(() => {
-                    const iconProps = { size: 22, color: item.color };
-                    if (item.iconName === "Book") return <Book {...iconProps} />;
-                    if (item.iconName === "Layers") return <Layers {...iconProps} />;
-                    if (item.iconName === "History") return <History {...iconProps} />;
-                    if (item.iconName === "Layers2") return <Layers2 {...iconProps} />;
-                    if (item.iconName === "Calendar") return <Calendar {...iconProps} />;
-                    return <Award {...iconProps} />;
-                  })()}
-                </View>
-                <Text style={styles.menuTitle}>{item.title}</Text>
-              </TouchableOpacity>
-            ))}
+          <View>
+            {trendPoints.length > 0 && (
+              <View style={{ marginBottom: 24 }}>
+                <Text style={[styles.menuTitle, { marginBottom: 12 }]}>Évolution des moyennes</Text>
+                <GradeTrendChart points={trendPoints} threshold={getPassingThreshold(studentNiveau)} />
+              </View>
+            )}
+            <View style={styles.menuGrid}>
+              {MENU_ITEMS.map((item) => (
+                <TouchableOpacity key={item.id} style={styles.menuCard} onPress={() => handleCategoryPress(item.id)} activeOpacity={0.7}>
+                  <View style={[styles.iconBg, { backgroundColor: item.color + "15" }]}>
+                    {(() => {
+                      const iconProps = { size: 22, color: item.color };
+                      if (item.iconName === "Book") return <Book {...iconProps} />;
+                      if (item.iconName === "Layers") return <Layers {...iconProps} />;
+                      if (item.iconName === "History") return <History {...iconProps} />;
+                      if (item.iconName === "Layers2") return <Layers2 {...iconProps} />;
+                      if (item.iconName === "Calendar") return <Calendar {...iconProps} />;
+                      return <Award {...iconProps} />;
+                    })()}
+                  </View>
+                  <Text style={styles.menuTitle}>{item.title}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
         ) : (
           <FlatList
@@ -542,7 +557,8 @@ export default function NotesScreen() {
                 styles, 
                 category: selectedCategory, 
                 onStatsPress: handleStatsPress,
-                isGradePrivacyEnabled
+                isGradePrivacyEnabled,
+                studentNiveau
               };
               
               if (selectedCategory === "currentElems" || selectedCategory === "allElems") return <NoteElementItem {...props} />;
@@ -576,7 +592,7 @@ export default function NotesScreen() {
                     let valueColor = theme.accent;
                     
                     if (isImportantMetric && numValue !== null) {
-                      valueColor = numValue < 11 ? "#FF6B6B" : "#6BCB77";
+                      valueColor = numValue < getPassingThreshold(studentNiveau) ? "#FF6B6B" : "#6BCB77";
                     }
                     
                     return (

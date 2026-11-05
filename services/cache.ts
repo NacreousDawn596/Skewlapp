@@ -84,6 +84,38 @@ export const setCachedElementNames = async (names: Record<string, string>): Prom
   }
 };
 
+const UNRESOLVED_NAMES_KEY = "skewl_element_names_unresolved";
+
+export const setUnresolvedNameCodes = async (codes: string[]): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(UNRESOLVED_NAMES_KEY, JSON.stringify(Array.from(new Set(codes))));
+  } catch (error) {
+    console.error(`Failed to save unresolved name codes:`, error);
+  }
+};
+
+export const findUnresolvedCodes = (
+  items: unknown,
+  mapping: Record<string, string>
+): string[] => {
+  if (!Array.isArray(items)) return [];
+  const unresolved = new Set<string>();
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const code =
+      (item as any).CodeElem ??
+      (item as any).CodeMod ??
+      (item as any).Element ??
+      (item as any).Module ??
+      (item as any).Type ??
+      (item as any).code;
+    if (typeof code === "string" && code.trim().length > 0 && !mapping[code]) {
+      unresolved.add(code);
+    }
+  }
+  return Array.from(unresolved);
+};
+
 export const cleanData = (data: any): any => {
     if (!data || typeof data !== "object") return data;
     
