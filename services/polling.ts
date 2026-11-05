@@ -64,7 +64,7 @@ const DEFAULT_SETTINGS: PollSettings = {
   gradePrivacy: false,
   hapticsEnabled: true,
   hapticsIntensity: 3,
-  historicalRefreshInterval: 24,
+  historicalRefreshInterval: 72,
 };
 
 const lastFetchTime: Record<PollEndpoint, number> = {

@@ -93,13 +93,38 @@ export default function SettingsScreen() {
     );
   };
 
+  const showIntervalWarning = (onConfirm: () => void, onCancel?: () => void) => {
+    Alert.alert(
+      "Intervalle réduit",
+      "Utiliser des intervalles plus courts peut envoyer de nombreuses requêtes au serveur et entraîner la restriction de votre compte. Vous continuez à vos propres risques.",
+      [
+        { text: "Annuler", style: "cancel", onPress: onCancel },
+        { text: "Je comprends", style: "destructive", onPress: onConfirm },
+      ]
+    );
+  };
+
   const handleIntervalChange = () => {
     const interval = parseInt(intervalInput, 10);
-    if (interval >= 1 && interval <= 360) {
-      updateSettingsMutation.mutate({ interval });
-    } else {
+    const current = settingsQuery.data?.interval ?? 45;
+
+    if (isNaN(interval) || interval < 1 || interval > 360) {
       Alert.alert("Intervalle invalide", "Veuillez entrer une valeur entre 1 et 360 minutes");
+      setIntervalInput(String(current));
+      return;
     }
+
+    if (interval === current) return;
+
+    if (interval < current) {
+      showIntervalWarning(
+        () => updateSettingsMutation.mutate({ interval }),
+        () => setIntervalInput(String(current))
+      );
+      return;
+    }
+
+    updateSettingsMutation.mutate({ interval });
   };
 
   const fontSizes: { value: FontSize; label: string }[] = [
@@ -111,7 +136,7 @@ export default function SettingsScreen() {
 
   const hapticsEnabled = settingsQuery.data?.hapticsEnabled ?? DEFAULT_HAPTICS_ENABLED;
   const hapticsIntensity = settingsQuery.data?.hapticsIntensity ?? DEFAULT_HAPTICS_INTENSITY;
-  const historicalInterval = settingsQuery.data?.historicalRefreshInterval ?? 24;
+  const historicalInterval = settingsQuery.data?.historicalRefreshInterval ?? 72;
 
   return (
     <View style={styles.container}>
@@ -432,9 +457,15 @@ export default function SettingsScreen() {
                     styles.intervalOption,
                     historicalInterval === hours && styles.intervalOptionSelected,
                   ]}
-                  onPress={() =>
-                    updateSettingsMutation.mutate({ historicalRefreshInterval: hours })
-                  }
+                  onPress={() => {
+                    if (hours < historicalInterval) {
+                      showIntervalWarning(() =>
+                        updateSettingsMutation.mutate({ historicalRefreshInterval: hours })
+                      );
+                    } else {
+                      updateSettingsMutation.mutate({ historicalRefreshInterval: hours });
+                    }
+                  }}
                   activeOpacity={0.7}
                 >
                   <Text

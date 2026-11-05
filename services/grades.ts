@@ -233,8 +233,6 @@ export interface SimulatorElement {
   average: number;
   /** Original portal baseline for this element. */
   baseline: BaselineResult | null;
-  /** True when the exam grade is missing (not yet published / entered). */
-  examMissing: boolean;
 }
 
 export interface SimulatorModule {
@@ -257,14 +255,11 @@ export interface SimulatorResult {
  * @param modulesLookup modules returned by `getModules` (keyed by module code).
  * @param resultsMap map of element code → portal baseline result.
  * @param userMarks user overrides keyed by element code.
- * @param forceExamGrade optional exam grade used to fill *missing* exams
- *   (used by the reverse goal-seek solver). Other grades are left untouched.
  */
 export function computeSimulatorResult(
   modulesLookup: ModuleLookup,
   resultsMap: Map<string, BaselineResult>,
-  userMarks: UserMarks,
-  forceExamGrade?: number
+  userMarks: UserMarks
 ): SimulatorResult {
   const modules: SimulatorModule[] = [];
 
@@ -293,13 +288,7 @@ export function computeSimulatorResult(
 
       const cc = toGradeNumber(rawCc);
       const tp = toGradeNumber(rawTp);
-      let ex = toGradeNumber(rawEx);
-
-      // Goal-seek: fill missing exams with the hypothetical grade.
-      const examMissing = ex === null;
-      if (examMissing && forceExamGrade !== undefined) {
-        ex = forceExamGrade;
-      }
+      const ex = toGradeNumber(rawEx);
 
       const ratt = toGradeNumber(baseline?.RAT ?? baseline?.RATT);
 
@@ -323,7 +312,6 @@ export function computeSimulatorResult(
         ex: rawEx,
         average,
         baseline,
-        examMissing,
       });
 
       modSum += average * coefElem;
@@ -344,74 +332,6 @@ export function computeSimulatorResult(
 
   const globalAvg = computeGlobalAverage(modules);
   return { modules, globalAvg };
-}
-
-/* -------------------------------------------------------------------------- */
-/*                              Reverse goal-seek                             */
-/* -------------------------------------------------------------------------- */
-
-export type GoalSeekResult =
-  | { status: "already-achieved"; target: number; current: number }
-  | { status: "required"; required: number; target: number; current: number }
-  | { status: "impossible"; target: number; best: number }
-  | { status: "no-missing-exams"; target: number; current: number };
-
-/**
- * Solve "what exam grade x do I need to reach a target global average?"
- *
- * Only exam components whose grade has not yet been published or entered are
- * assumed to take the value x; every other grade is preserved. Uses bisection
- * over [0, 20] against the real simulator calculation.
- */
-export function requiredExamScore(
-  target: number,
-  modulesLookup: ModuleLookup,
-  resultsMap: Map<string, BaselineResult>,
-  userMarks: UserMarks
-): GoalSeekResult {
-  if (!Number.isFinite(target)) return { status: "impossible", target: 0, best: 0 };
-
-  // Current state (no forced exam).
-  const current = computeSimulatorResult(modulesLookup, resultsMap, userMarks);
-  const currentAvg = current.globalAvg;
-
-  // Are there any missing exams to vary?
-  const missingExams = current.modules.flatMap((m) =>
-    m.elements.filter((e) => e.examMissing)
-  );
-
-  if (missingExams.length === 0) {
-    return { status: "no-missing-exams", target, current: currentAvg };
-  }
-
-  const gpaAt = (x: number): number =>
-    computeSimulatorResult(modulesLookup, resultsMap, userMarks, x).globalAvg;
-
-  const bestAt20 = gpaAt(20);
-  const bestAt0 = gpaAt(0);
-
-  if (bestAt20 < target) {
-    return { status: "impossible", target, best: bestAt20 };
-  }
-
-  if (bestAt0 >= target) {
-    return { status: "already-achieved", target, current: currentAvg };
-  }
-
-  // Bisection for the smallest x with GPA(x) >= target.
-  let lo = 0;
-  let hi = 20;
-  for (let i = 0; i < 60; i++) {
-    const mid = (lo + hi) / 2;
-    if (gpaAt(mid) >= target) {
-      hi = mid;
-    } else {
-      lo = mid;
-    }
-  }
-
-  const required = Math.min(20, Math.ceil(hi * 100) / 100);
-  return { status: "required", required, target, current: currentAvg };
 }
 
 /* -------------------------------------------------------------------------- */

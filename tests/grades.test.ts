@@ -6,11 +6,8 @@ import {
   computeElementAverageWithRatt,
   computeModuleAverage,
   computeGlobalAverage,
-  requiredExamScore,
   buildSemesterTrend,
   semesterValue,
-  ModuleLookup,
-  BaselineResult,
 } from "../services/grades";
 
 const COEFS = { coefCc: 1, coefEx: 1, coefTp: 1, coefEcrit: 0 };
@@ -97,42 +94,6 @@ describe("module & global averages", () => {
     ]);
     expect(moduleAvg).toBeCloseTo((12 + 28) / 3, 5);
     expect(computeGlobalAverage([{ average: 10, coef: 1 }, { average: 12, coef: 1 }])).toBeCloseTo(11, 5);
-  });
-});
-
-describe("requiredExamScore (goal seek)", () => {
-  const modules: ModuleLookup = {
-    M1: {
-      intitule: "Module 1",
-      coef: 1,
-      elements: [
-        { code: "E1", intitule: "Element 1", coef_cc: 1, coef_ex: 1, coef_tp: 1, coef_ecrit: 2, coef_elem: 1 },
-      ],
-    },
-  };
-  const results: Map<string, BaselineResult> = new Map([
-    ["E1", { CC: 10, EX: null, TP: 10 }],
-  ]);
-
-  it("computes the required exam score", () => {
-    const r = requiredExamScore(8, modules, results, {});
-    expect(r.status).toBe("required");
-    if (r.status === "required") expect(r.required).toBeCloseTo(4, 2);
-  });
-  it("detects an already-achieved objective", () => {
-    const r = requiredExamScore(6, modules, results, {});
-    expect(r.status).toBe("already-achieved");
-  });
-  it("detects an impossible objective", () => {
-    const r = requiredExamScore(15, modules, results, {});
-    expect(r.status).toBe("impossible");
-  });
-  it("detects no missing exams", () => {
-    const filled: Map<string, BaselineResult> = new Map([
-      ["E1", { CC: 10, EX: 12, TP: 10 }],
-    ]);
-    const r = requiredExamScore(14, modules, filled, {});
-    expect(r.status).toBe("no-missing-exams");
   });
 });
 

@@ -32,9 +32,7 @@ import {
 } from "@/services/cache";
 import {
   computeSimulatorResult,
-  requiredExamScore,
   getPassingThreshold,
-  GoalSeekResult,
   BaselineResult,
   ModuleLookup,
 } from "@/services/grades";
@@ -48,7 +46,6 @@ import {
   Calculator,
   Layers,
   RotateCcw,
-  Target,
 } from "lucide-react-native";
 import { BlurView } from "expo-blur";
 
@@ -134,10 +131,6 @@ export default function CalculesScreen() {
   const [userMarks, setUserMarks] = useState<Record<string, { CC?: string, TP?: string, EX?: string }>>({});
   const [expandedModules, setExpandedModules] = useState<Record<string, boolean>>({});
   const marksLoadedRef = useRef(false);
-
-  // Goal-seek state
-  const [targetInput, setTargetInput] = useState("");
-  const [goalResult, setGoalResult] = useState<GoalSeekResult | null>(null);
 
   const calculatorSelection = useMemo(
     () => ({
@@ -450,7 +443,6 @@ export default function CalculesScreen() {
           style: "destructive",
           onPress: () => {
             setUserMarks({});
-            setGoalResult(null);
             hapticImpact();
           },
         },
@@ -491,35 +483,6 @@ export default function CalculesScreen() {
       Animated.timing(gpaAnim, { toValue: 1, duration: 150, useNativeDriver: true }),
     ]).start();
   }, [calculatedData.globalAvg, gpaAnim]);
-
-  const runGoalSeek = () => {
-    const target = parseFloat(targetInput.replace(',', '.'));
-    if (!Number.isFinite(target) || target < 0 || target > 20) {
-      setGoalResult(null);
-      Alert.alert("Objectif invalide", "Veuillez entrer une moyenne entre 0 et 20.");
-      return;
-    }
-    const result = requiredExamScore(target, modulesLookup, resultsMap, userMarks);
-    setGoalResult(result);
-    hapticImpact();
-  };
-
-  const goalSeekMessage = goalResult
-    ? (() => {
-        switch (goalResult.status) {
-          case "already-achieved":
-            return `Objectif déjà atteint (moyenne actuelle: ${goalResult.current.toFixed(2)}/20).`;
-          case "required":
-            return `Il vous faut au minimum ${goalResult.required.toFixed(2)}/20 à l'examen.`;
-          case "impossible":
-            return `Objectif impossible, même avec 20/20 (meilleur résultat: ${goalResult.best.toFixed(2)}/20).`;
-          case "no-missing-exams":
-            return "Toutes les notes d'examen sont déjà publiées. Rien à simuler.";
-          default:
-            return null;
-        }
-      })()
-    : null;
 
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container}>
@@ -591,29 +554,6 @@ export default function CalculesScreen() {
           </ScrollView>
         </View>
 
-        <View style={styles.goalCard}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-            <Target size={scaled(18)} color={theme.accent} />
-            <Text style={styles.goalTitle}>Objectif de moyenne</Text>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <TextInput
-              style={styles.goalInput}
-              value={targetInput}
-              onChangeText={setTargetInput}
-              keyboardType="numeric"
-              placeholder="ex: 14"
-              placeholderTextColor={theme.muted}
-            />
-            <TouchableOpacity style={styles.goalButton} onPress={runGoalSeek} activeOpacity={0.7}>
-              <Text style={styles.goalButtonText}>Calculer</Text>
-            </TouchableOpacity>
-          </View>
-          {goalSeekMessage && (
-            <Text style={styles.goalResultText}>{goalSeekMessage}</Text>
-          )}
-        </View>
-
         {modulesLookupQuery.isLoading ? (
           <ActivityIndicator color={theme.accent} style={{ marginTop: 40 }} />
         ) : calculatedData.modules.length > 0 ? (
@@ -683,27 +623,6 @@ const createStyles = (theme: any, scaled: (n: number) => number) =>
     chipActive: { backgroundColor: theme.accent + '20', borderColor: theme.accent },
     chipText: { fontSize: 12, fontWeight: '700', color: theme.muted },
     chipActiveText: { color: theme.accent },
-    goalCard: { backgroundColor: theme.surface, borderRadius: 24, padding: 16, marginBottom: 16, elevation: 2 },
-    goalTitle: { fontSize: scaled(15), fontWeight: '800', color: theme.text, marginLeft: 8 },
-    goalInput: {
-      flex: 1,
-      backgroundColor: theme.background,
-      borderRadius: 12,
-      paddingVertical: 10,
-      paddingHorizontal: 14,
-      fontSize: scaled(16),
-      fontWeight: '700',
-      color: theme.text,
-      marginRight: 10,
-    },
-    goalButton: {
-      backgroundColor: theme.accent,
-      borderRadius: 12,
-      paddingVertical: 10,
-      paddingHorizontal: 16,
-    },
-    goalButtonText: { fontSize: scaled(14), fontWeight: '800', color: '#FFFFFF' },
-    goalResultText: { fontSize: scaled(13), fontWeight: '600', color: theme.text, marginTop: 12 },
     modCard: { backgroundColor: theme.surface, borderRadius: 24, marginBottom: 16, overflow: 'hidden', elevation: 2 },
     modHeader: { padding: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     modTitle: { fontSize: 16, fontWeight: '700', color: theme.text, flex: 1 },
