@@ -36,7 +36,8 @@
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.SCHEDULE_EXACT_ALARM",
         "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_LOCATION"
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.WAKE_LOCK"
       ]
     },
     "web": {
@@ -74,9 +75,9 @@
         "origin": "https://kamal.aferiad.com/"
       },
       "eas": {
-        "projectId": "73930e3e-cffd-442f-9402-eb5dbead92e9"
+        "projectId": "a82e5c79-9e69-4926-bc8f-9e22f17e7372"
       }
     },
-    "owner": "nacreousdawn596"
+    "owner": "kiimooo"
   }
 }
