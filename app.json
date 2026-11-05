@@ -32,6 +32,7 @@
         "backgroundColor": "#ffffff"
       },
       "package": "skewlapp.aferiad.kamal",
+      "versionCode": 50101,
       "permissions": [
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.SCHEDULE_EXACT_ALARM",
