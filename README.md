@@ -51,4 +51,4 @@ SkewlApp is a professional, feature-rich mobile application designed for student
 ---
 
 ## 👨‍💻 Credits
-Developed with passion (and lots of caffeine) by **Aferiad Kamal** & **Feddoul Salma**.
+Developed with passion (and lots of caffeine) by **Aferiad Kamal**.
