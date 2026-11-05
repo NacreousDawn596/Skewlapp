@@ -20,7 +20,7 @@
 
 ## ✨ Overview
 
-**SkewlApp** is a professional mobile application for students of **ENSAM-UMI** (École Nationale Supérieure d'Arts et Métiers, Université Mohammed V) to interact with the official **SchoolApp** portal. It wraps the school's HTML portal into a fast, native, offline-first experience — with smart background sync, real-time notifications, and a powerful grade simulator.
+**SkewlApp** is a professional mobile application for students of **ENSAM-UMI** (École Nationale Supérieure d'Arts et Métiers, Université Moulay Ismail) to interact with the official **SchoolApp** portal. It wraps the school's HTML portal into a fast, native, offline-first experience — with smart background sync, real-time notifications, and a powerful grade simulator.
 
 > ⚡ **Why SkewlApp?** The official portal is web-only and clunky on mobile. SkewlApp gives you instant access, cached data when you're offline, and a push notification the moment a new grade or absence appears.
 
