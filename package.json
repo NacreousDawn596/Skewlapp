@@ -1,7 +1,11 @@
 {
   "name": "skewlapp",
   "main": "expo-router/entry",
-  "version": "5.0.6",
+  "version": "5.1.0",
+  "author": {
+    "name": "Aferiad Kamal",
+    "email": "kamal@aferiad.com"
+  },
   "scripts": {
     "start": "expo start",
     "start-web": "expo start --web",
